@@ -8,21 +8,21 @@ output:
 ```{r read_cli}
 rm(list=ls())
 #setwd("C:/Users/IVA/Dropbox/24516/trace2017/fmvcd/krest/"); getwd()
+setwd("C:/Users/teipolykom/git/fmvcd/krest/"); getwd()
 #setwd("Z:/home/larisa/Dropbox/git/fmvcd/krest/"); getwd()
-setwd("/home/larisa/Dropbox/git/fmvcd/krest/"); getwd()
+#setwd("/home/larisa/Dropbox/git/fmvcd/krest/"); getwd()
 file_list <- list.files(pattern = "\\.cli$"); file_list
 
  for (file in file_list){
-  # if the merged dataset doesn't exist, create it
-  if (!exists("dataset")){
-    dataset <- read.table(file, header=FALSE, sep="")
-  }
-   
   # if the merged dataset does exist, append to it
   if (exists("dataset")){
     temp_dataset <-read.table(file, header=FALSE, sep="")
     dataset<-rbind(dataset, temp_dataset)
     rm(temp_dataset)
+  }
+  # if the merged dataset doesn't exist, create it
+  if (!exists("dataset")){
+    dataset <- read.table(file, header=FALSE, sep="")
   }
 }
 dataset_krest <- dataset; names(dataset_krest) <- c("day", "month", "year", "prec", "temp")
@@ -34,23 +34,7 @@ str(dataset_krest)
 dataset_krest[dataset_krest$prec == -9999, 4] <- NA; 
 dataset_krest[dataset_krest$temp == -9999, 5] <- NA; summary(dataset_krest)
 ```
-#### I'm trying to use R's neuralnet package  for prediction.
-  + <http://cran.r-project.org/web/packages/neuralnet/neuralnet.pdf>
-  + http://gekkoquant.com/2012/05/26/neural-networks-with-r-simple-example/
-```{r demo}
-# http://stats.stackexchange.com/questions/65292/r-neuralnet-compute-give-a-constant-answer
-install.packages('neuralnet', dependencies=TRUE, repos='http://cran.rstudio.com/')
-library(neuralnet)
-Time <- as.integer(runif(50, 0, 100))
-Sqrt <- sqrt(Time)
-sqrt.data <- data.frame(Time, Sqrt)
-plot(sqrt.data)
-net.sqrt <- neuralnet(Sqrt~Time, sqrt.data, hidden=10, threshold=0.01)
-print(net.sqrt)
-plot(net.sqrt)
-compute(net.sqrt, (1:10)^2)$net.result
 
-```
 #### Prediction - Neural network for regression
 
 Esli vy zanimaetes' modelirovaniem chego ugodno na dannyh, to vam nuzhno imet' dve vyborki: trenirovochnuju i testovuju. Na trenirovochnoj vy stroite model', a na testovoj dolzhny proverit' ee kachestvo;)
@@ -58,6 +42,7 @@ Esli vy zanimaetes' modelirovaniem chego ugodno na dannyh, to vam nuzhno imet' d
 ```{r kresr1969}
 #install.packages('neuralnet', dependencies=TRUE, repos='http://cran.rstudio.com/')
 library(neuralnet)
+library(pracma)
 NORM_TEMP <- 450.0
 krestTemp1969 <- dataset_krest[dataset_krest$year == 1969, 5]
 summary(krestTemp1969) ###
@@ -65,18 +50,25 @@ Temp <- krestTemp1969  / NORM_TEMP
 Time <- (1:length(Temp)) / 370.0
 
 year1966.data <- data.frame(Time, Temp)
-nrow(year1966.data)
-nrow(na.omit(year1966.data))
+cat("All days=", nrow(year1966.data), "\n")
+cat("Days na.omit=", nrow(na.omit(year1966.data)),"\n")
 year1966.data.train <- na.omit(year1966.data)
-train <- year1966.data.train[sample(nrow(year1966.data.train), 65), ]
+# Train, Test and Validation 70: 20: 10
+train <- year1966.data.train[sample(nrow(year1966.data.train), 296), ]
+test <- year1966.data.train[sample(nrow(year1966.data.train), 96), ]
+validation <- year1966.data[is.na(year1966.data$Temp), ]
+
 plot(train)
-net.temp <- neuralnet(Temp~Time, train, hidden=11, threshold=0.01, linear.output=TRUE)
-net.temp$result.matrix[1]
+ptm <- proc.time(); tic()
+net.temp <- neuralnet(Temp~Time, train, hidden=c(7,11,11,7), threshold=0.005, linear.output=TRUE)
+toc(); cat("runTime= ", proc.time() - ptm,"\n")
+cat("Error= ", net.temp$result.matrix[1],"\n")
 #save(net.temp, file="net.temp65-11.RData")
 
-#plot(net.temp)
+# plot(net.temp)
 # https://journal.r-project.org/archive/2010-1/RJournal_2010-1_Guenther+Fritsch.pdf
 # https://www.r-bloggers.com/selecting-the-number-of-neurons-in-the-hidden-layer-of-a-neural-network/
+# https://geektimes.ru/post/211610/
 ```
 ####  
   
@@ -127,7 +119,6 @@ write.table(filledKrest1969, file="1969.cli.filled", row.names = FALSE)
   + http://user2016.org/
   + https://earlconf.com/2017/
   + http://international.sfu-kras.ru/news/17388
-
 
 
 
