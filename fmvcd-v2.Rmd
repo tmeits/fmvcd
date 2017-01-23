@@ -8,19 +8,53 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+### The calculation of all values of the vector by the neural network
+```{r compute}
+compute_all <- function(net.train, Time){
+  return(compute(net.train, Time)$net.result)
+}
+
+```
+### filling the gaps
+```{r filling}
+fillin_missing_data <- function(vector_cli, nnet_cli, NORM_TEMP){
+  for(i in (1: length(vector_cli))){
+    if(is.na(vector_cli[i])){
+      vector_cli[i] <- as.integer(nnet_cli[i] * NORM_TEMP)
+    }
+  }
+}
+```
 ### The construction of neural models and the calculation of missing data
 ```{r nnet_cli}
+library(neuralnet)
+NORM_TEMP <- 450.0; NORM_TIME <- 370.0; NUM_TRAIN <- 65; HIDDEN <- 11
 nnet_cli <- function(vector_cli){
-  return(vector_cli)
+  if( length(vector_cli) < 365) warning("Your year has fewer than 365 days")
+  Temp <- vector_cli  / NORM_TEMP
+  Time <- (1:length(Temp)) / NORM_TIME
+  year_data <- data.frame(Time, Temp)
+  if(nrow(year_data) - nrow(na.omit(year_data)) == 0){
+    cat("The vector does not contain missing values\n")
+    return(vector_cli)
+  } else {
+    train <- na.omit(year_data)
+    train <- train[sample(nrow(train), NUM_TRAIN), ]
+    net.train <- neuralnet(Temp~Time, train, hidden = HIDDEN, threshold = 0.01, linear.output=TRUE)
+    cat("Error=", net.train$result.matrix[1],"\n")
+    nnet_cli <- compute_all(net.train, Time)
+    fillin_vector_cli <- fillin_missing_data(vector_cli, nnet_cli, NORM_TEMP)
+  }
+  return(fillin_vector_cli)
 }
 ```
 
 ## Read cliData
 ```{r read_cli}
 #rm(list=ls())
-filled_path <- "C:/Users/teipolykom/git/fmvcd/krest/"
+#filled_path <- "C:/Users/teipolykom/git/fmvcd/krest/"
 #filled_path <- "Z:/home/larisa/Dropbox/git/fmvcd/krest/"
-#filled_path <- "/home/larisa/Dropbox/git/fmvcd/krest/"
+filled_path <- "/home/larisa/Dropbox/git/fmvcd/krest/"
 setwd(filled_path); getwd()
 
 file_list <- list.files(pattern = "\\.cli$"); file_list
@@ -32,13 +66,23 @@ for (file in file_list){
   temp_cli_dataset[temp_cli_dataset$temp == -9999, 5] <- NA
   temp_vector <- temp_cli_dataset[, 5]
   prec_vector <- temp_cli_dataset[, 4]
+  cat("Year=", temp_cli_dataset[1, 3], "\n")
+  print(summary(temp_cli_dataset[, c(4 ,5)]))
   # There are missing data for precipitation
-  temp_vector <- nnet_cli(temp_vector)
-  # Has missing temperature data
+  print(length(prec_vector))
   prec_vector <- nnet_cli(prec_vector)
+  print(length(prec_vector))
+  # Has missing temperature data
+  temp_vector <- nnet_cli(temp_vector)
   # Collect new dataset
-  filled_cli <- temp_cli_dataset
-  write.table(filled_cli, file=paste0(filled_path, "/filled/", file), row.names = FALSE)
+  print(length(temp_vector))
+  filled_cli <- data.frame(temp_cli_dataset[, c(1, 2, 3)], prec_vector, temp_vector)
+  names(filled_cli) <- c("day", "month", "year", "prec", "temp")
+  cat("=============================\n")
+  print(summary(filled_cli[, c(4 ,5)]))
+  # http://stackoverflow.com/questions/4216753/check-existence-of-directory-and-create-if-doesnt-exist
+  # http://stackoverflow.com/questions/14219887/how-to-delete-a-file-with-r
+  write.table(filled_cli, file=paste(filled_path, "/filled/", file, sep=""), row.names = FALSE)
 }
 ```
 
