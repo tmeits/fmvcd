@@ -8,8 +8,8 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-##
-```{r }
+### The construction of neural models and the calculation of missing data
+```{r nnet_cli}
 nnet_cli <- function(vector_cli){
   return(vector_cli)
 }
@@ -44,10 +44,8 @@ for (file in file_list){
 
 ## 
 
-```{r nnet_cli, echo=FALSE}
-nnet_cli <- function(vector_cli){
-  return(vector_cli)
-}
+```{r libs, echo=FALSE}
+
 
 ```
 
