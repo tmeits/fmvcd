@@ -1,0 +1,54 @@
+---
+title: "NNETCLI - filling in missing values in climate data"
+author: "IVA"
+date: '23.1.17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+##
+```{r }
+nnet_cli <- function(vector_cli){
+  return(vector_cli)
+}
+```
+
+## Read cliData
+```{r read_cli}
+#rm(list=ls())
+filled_path <- "C:/Users/teipolykom/git/fmvcd/krest/"
+#filled_path <- "Z:/home/larisa/Dropbox/git/fmvcd/krest/"
+#filled_path <- "/home/larisa/Dropbox/git/fmvcd/krest/"
+setwd(filled_path); getwd()
+
+file_list <- list.files(pattern = "\\.cli$"); file_list
+for (file in file_list){
+  temp_cli_dataset <-read.table(file, header=FALSE, sep="")
+  names(temp_cli_dataset) <- c("day", "month", "year", "prec", "temp"); 
+  # print(summary(temp_cli_dataset))
+  temp_cli_dataset[temp_cli_dataset$prec == -9999, 4] <- NA
+  temp_cli_dataset[temp_cli_dataset$temp == -9999, 5] <- NA
+  temp_vector <- temp_cli_dataset[, 5]
+  prec_vector <- temp_cli_dataset[, 4]
+  # There are missing data for precipitation
+  temp_vector <- nnet_cli(temp_vector)
+  # Has missing temperature data
+  prec_vector <- nnet_cli(prec_vector)
+  # Collect new dataset
+  filled_cli <- temp_cli_dataset
+  write.table(filled_cli, file=paste0(filled_path, "/filled/", file), row.names = FALSE)
+}
+```
+
+## 
+
+```{r nnet_cli, echo=FALSE}
+nnet_cli <- function(vector_cli){
+  return(vector_cli)
+}
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
