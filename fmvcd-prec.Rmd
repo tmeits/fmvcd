@@ -1,0 +1,152 @@
+---
+title: "PREC - filling in missing values in climate data"
+author: "IVA"
+date: '24.1.17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### The calculation of all values of the vector by the neural network
+```{r compute}
+compute_prec_all <- function(net.train, Time){
+  return(compute(net.train, Time)$net.result)
+}
+
+```
+### filling the gaps
+```{r filling}
+fillin_missing_data <- function(vector_cli, nnet_cli, NORM_TEMP){
+  for(i in (1: length(vector_cli))){
+    if(is.na(vector_cli[i])){
+      vector_cli[i] <- as.integer(nnet_cli[i] * NORM_TEMP)
+    }
+  }
+  return(vector_cli)
+}
+```
+### The construction of neural models and the calculation of missing data
+```{r nnet_cli}
+library(neuralnet)
+NORM_TEMP <- 450.0; NORM_TIME <- 370.0; NUM_TRAIN <- 65; HIDDEN <- 11
+NUM_TRAIN <- 265; HIDDEN <- 32
+
+nnet_prec_cli <- function(vector_cli, vec_type = "temp"){
+  if( length(vector_cli) < 365) warning("Your year has fewer than 365 days")
+  Temp <- vector_cli  / NORM_TEMP
+  Time <- (1:length(Temp)) / NORM_TIME
+  year_data <- data.frame(Time, Temp)
+  if(nrow(year_data) - nrow(na.omit(year_data)) == 0){
+    cat("The vector does not contain missing values\n")
+    return(vector_cli)
+  } else {
+    train <- na.omit(year_data)
+    train <- train[sample(nrow(train), NUM_TRAIN), ]
+    net.train <- neuralnet(Temp~Time, train, hidden = HIDDEN, threshold = 0.01, linear.output=TRUE)
+    cat("Error=", net.train$result.matrix[1],"\n")
+    nnet_cli <- compute_all(net.train, Time)
+    fillin_vector_cli <- fillin_missing_data(vector_cli, nnet_cli, NORM_TEMP)
+  }
+  return(fillin_vector_cli)
+}
+```
+
+## model neural network
+```{r model_neural_network}
+require(nnet)
+require(neuralnet)
+#filled_path <- "C:/Users/teipolykom/git/fmvcd/krest/"
+filled_path <- "/home/larisa/Dropbox/git/fmvcd/krest/"
+setwd(filled_path); getwd()
+
+cli_dataset <-read.table("1967.cli", header=FALSE, sep="")
+names(cli_dataset) <- c("day", "month", "year", "prec", "temp");
+cli_dataset[cli_dataset$prec == -9999, 4] <- NA
+print(summary(cli_dataset[, c(4)]))
+
+prec_vector <- cli_dataset[, 4]
+# scale inputs: divide by 191 to get 0-1 range
+prec_vector_normalize <- prec_vector / max(na.omit(prec_vector))
+plot(1: length(prec_vector), prec_vector_normalize)
+
+train <- data.frame(time= (1: length(prec_vector_normalize)), prec=prec_vector_normalize)
+train <- data.frame(time= (1: length(prec_vector)), prec=prec_vector/1.0)
+train <- na.omit(train)
+nnet.fit <- nnet(prec ~ time, data=train, size=21)
+neuralnet.fit <- neuralnet(prec ~ time, train, hidden = 11, threshold = 0.1, linear.output=TRUE)
+cat("Error =", neuralnet.fit$result.matrix[1],"\n")
+neuralnet.compute <- compute(neuralnet.fit, train[,1])$net.result*191
+
+# multiply 191 to restore original scale
+nnet.predict <- predict(nnet.fit)*191.0
+
+prec_stat <- c(0L, 0L, 0L, NA, 4L, 0L, 0L, 2L, NA, NA, 5L, NA, NA, NA, 0L, 
+NA, NA, 2L, 0L, 6L, 11L, 8L, 0L, NA, 4L, 0L, NA, 0L, 0L, NA, 
+0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, NA, 0L, 0L, 0L, 0L, 0L, 0L, 
+0L, 0L, 11L, 8L, 0L, 5L, 2L, NA, 2L, NA, 2L, 0L, 0L, 5L, 4L, 
+4L, 22L, 11L, 0L, 0L, 2L, 5L, NA, NA, 16L, 11L, 2L, 2L, 0L, 13L, 
+2L, 0L, 0L, 0L, 0L, 2L, 2L, 11L, 5L, 0L, 0L, 0L, 0L, 0L, 0L, 
+0L, NA, 0L, 0L, NA, 0L, 0L, 13L, 0L, 0L, 0L, 0L, 32L, 0L, 2L, 
+NA, 0L, 0L, NA, NA, NA, 16L, 13L, 160L, 0L, 0L, 0L, NA, NA, 0L, 
+0L, 0L, 0L, 0L, 0L, 20L, 60L, 20L, NA, 108L, 40L, 89L, 8L, 0L, 
+18L, 30L, 37L, 148L, 54L, 0L, 0L, 40L, 0L, 11L, 40L, 45L, NA, 
+33L, 70L, 16L, 0L, 67L, 40L, 0L, 9L, 5L, 0L, 0L, 0L, 18L, 0L, 
+2L, 0L, 0L, 0L, 47L, 0L, 0L, 0L, 0L, 0L, 0L, 27L, 16L, 0L, 0L, 
+0L, 0L, 96L, 0L, 0L, 0L, 0L, 0L, 18L, 11L, 0L, 4L, 0L, 0L, 0L, 
+0L, 0L, 0L, NA, 0L, 0L, 0L, 0L, 0L, NA, 80L, 0L, 0L, 0L, 0L, 
+0L, 36L, 89L, 4L, 0L, 120L, 145L, 191L, 5L, 0L, 0L, 0L, 0L, 10L, 
+4L, 0L, 0L, 0L, NA, 0L, 0L, 0L, 0L, 0L, 0L, 10L, 0L, 0L, 0L, 
+0L, 33L, 2L, 4L, 0L, 9L, 0L, 2L, 0L, 0L, 0L, 0L, NA, 0L, 0L, 
+65L, 115L, 100L, 21L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 
+0L, 0L, 4L, 0L, 20L, 145L, 9L, 26L, 0L, 0L, 0L, 13L, 0L, 0L, 
+47L, 5L, 0L, 5L, 0L, 0L, 0L, 0L, 0L, 0L, 2L, 2L, 0L, 0L, 9L, 
+0L, 5L, 5L, 2L, 5L, 5L, 8L, 0L, 2L, 4L, 22L, 6L, 18L, 0L, 4L, 
+0L, 0L, 9L, 0L, 0L, 0L, 5L, 0L, 0L, 0L, NA, 4L, 5L, 6L, 27L, 
+0L, 2L, 0L, 6L, 13L, NA, 4L, 2L, 0L, 0L, 0L, 0L, NA, 0L, 0L, 
+0L, 0L, 5L, 6L, 0L, 0L, 2L, 9L, 8L, 4L, 0L, 16L, 0L, 0L, 2L, 
+0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 2L, 0L)
+
+
+# https://heuristically.wordpress.com/2011/11/17/using-neural-network-for-regression/
+# https://www.rdocumentation.org/packages/caretEnsemble/versions/2.0.0/topics/caretEnsemble
+# https://www.researchgate.net/post/How_can_I_change_standardized_predicted_values_of_neural_network_into_non-standard_values
+# http://www.di.fc.ul.pt/~jpn/r/neuralnets/neuralnets.html
+# http://www.parallelr.com/r-deep-neural-network-from-scratch/
+# https://github.com/PatricZhao/ParallelR
+# http://playground.tensorflow.org/#activation=tanh&batchSize=10&dataset=circle&regDataset=reg-plane&learningRate=0.03&regularizationRate=0&noise=0&networkShape=4,2&seed=0.26118&showTestData=false&discretize=false&percTrainData=50&x=true&y=true&xTimesY=false&xSquared=false&ySquared=false&cosX=false&sinX=false&cosY=false&sinY=false&collectStats=false&problem=classification&initZero=false&hideText=false
+# http://beyondvalence.blogspot.ru/2014/04/r-comparing-multiple-and-neural-network.html
+# http://machinelearningmastery.com/non-linear-regression-in-r/
+#http://www.dataminingblog.com/standardization-vs-normalization/
+```
+```{r}
+library(nnet)
+# load data
+data(longley)
+x <- longley[,1:6]
+y <- longley[,7]
+# fit model
+fit <- nnet(Employed~., longley, size=12, maxit=500, linout=T, decay=0.01)
+# summarize the fit
+summary(fit)
+# make predictions
+predictions <- predict(fit, x, type="raw")
+# summarize accuracy
+mse <- mean((y - predictions)^2)
+print(mse)
+```
+
+## 
+  
+```{r libs, echo=FALSE}
+standardize <- function(){
+  # standardize them in range of 0 to 1
+  (x-xmin)/(xmax-xmin)
+}
+# https://jsbin.com
+# http://css3generator.com/
+# http://enjoycss.com/
+# http://www.css3maker.com/
+# 
+
+```
