@@ -15,10 +15,10 @@ train <- data.frame(time= (1: length(prec_vector)), prec=prec_vector/350.)
 train <- na.omit(train)
 plot(train, col = "red")
 
-nnet.fit <- nnet(prec~ ., data=train, size=41, 
-                 linout=TRUE, skip=TRUE, MaxNWts=10000, trace=F, maxit=5500)
+nnet.fit <- nnet(prec~ ., data=train, size=121, 
+                 linout=TRUE, skip=TRUE, MaxNWts=10000, trace=TRUE, maxit=5500)
 # summarize the fit
-# print(summary(nnet.fit))
+print(summary(nnet.fit))
 # make predictions
 x <- data.frame(time=train[, 1])
 predictions <- predict(nnet.fit, x, type="raw")
@@ -27,3 +27,8 @@ predictions <- predict(nnet.fit, x, type="raw")
 y <- train[, 2]
 mse <- mean((y - predictions)^2)
 cat("MSE = ", mse, "\n")
+
+# https://www.r-bloggers.com/selecting-the-number-of-neurons-in-the-hidden-layer-of-a-neural-network/
+# https://www.r-bloggers.com/visualizing-neural-networks-from-the-nnet-package/
+
+
