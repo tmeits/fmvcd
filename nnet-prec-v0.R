@@ -1,3 +1,4 @@
+# It’s all about hidden layers
 require(nnet)
 
 rm(list=ls())
@@ -12,23 +13,72 @@ print(summary(cli_dataset[, c(4)]))
 
 prec_vector <- cli_dataset[, 4]
 train <- data.frame(time= (1: length(prec_vector)), prec=prec_vector/350.)
-train <- na.omit(train)
 plot(train, col = "red")
 
-nnet.fit <- nnet(prec~ ., data=train, size=121, 
-                 linout=TRUE, skip=TRUE, MaxNWts=10000, trace=TRUE, maxit=5500)
+#nnet(x, y, weights, size, Wts, mask, linout = FALSE, entropy = FALSE, softmax = FALSE, 
+#     censored = FALSE, skip = FALSE, rang = 0.7, decay = 0, maxit = 100, Hess = FALSE, 
+#     trace = TRUE, MaxNWts = 1000, abstol = 1.0e-4, reltol = 1.0e-8, ...)
+nnet.fit <- nnet(prec~ ., data=train, size=12, na.action = "na.omit",
+                 linout=TRUE, skip=TRUE, MaxNWts=10000, trace=TRUE, maxit=500)
 # summarize the fit
-print(summary(nnet.fit))
+#print(summary(nnet.fit))
 # make predictions
 x <- data.frame(time=train[, 1])
 predictions <- predict(nnet.fit, x, type="raw")
 
 # summarize accuracy
 y <- train[, 2]
-mse <- mean((y - predictions)^2)
+mse <- mean((y - predictions)^2, na.rm = T)
 cat("MSE = ", mse, "\n")
+
+
+#import function from Github
+require(RCurl)
+
+root.url <- 'https://gist.github.com/fawda123'
+raw.fun <- paste(root.url, 
+               '5086859/raw/17fd6d2adec4dbcf5ce750cbd1f3e0f4be9d8b19/nnet_plot_fun.r', 
+               sep='/')
+
+# install.packages("scales")
+# install.packages("foreach")
+library(foreach)
+source("nnet_plot.R")
+par(mar=numeric(4),mfrow=c(1,2),family='serif')
+plot.nnet(nnet.fit, nid=F)
+plot.nnet(nnet.fit)
+
 
 # https://www.r-bloggers.com/selecting-the-number-of-neurons-in-the-hidden-layer-of-a-neural-network/
 # https://www.r-bloggers.com/visualizing-neural-networks-from-the-nnet-package/
+# https://www.r-bloggers.com/imputing-missing-data-with-expectation-maximization/
+# https://www.r-bloggers.com/what-are-the-best-machine-learning-packages-in-r/
+# http://portal.stats.ox.ac.uk/userdata/ripley/Photos/CorkKerry2015/photos/DSCF0666.jpg
+# https://xakep.ru/2017/01/20/loops-in-r-v2/
+# https://www.rdocumentation.org/packages/nnet/versions/7.3-12/topics/nnet
+# https://xakep.ru/2015/04/20/195-learning-r-programming-language/
+# https://habrahabr.ru/company/infopulse/blog/305692/
+# https://habrahabr.ru/company/infopulse/blog/307242/
+# https://habrahabr.ru/company/infopulse/blog/307708/
+# https://habrahabr.ru/post/310108/
+# https://habrahabr.ru/company/infopulse/blog/309052/
+# https://habrahabr.ru/post/310472/
+# https://habrahabr.ru/post/317130/
+# https://habrahabr.ru/post/317314/
+# https://habrahabr.ru/post/301176/
+# http://www.codeinstinct.pro/2015/11/azure-ml-hackathon.html
+# http://www.codeinstinct.pro/2015/03/azure-machine-learning-for-data-scientist.html
+# http://www.codeinstinct.pro/2016/10/gpu-in-cloud.html
+# 
+# !!! https://habrahabr.ru/company/infopulse/blog/281400/
+# https://github.com/ropensci/lawn
+# http://tryr.codeschool.com/levels/1/challenges/3
+# https://stepik.org/course/%D0%9E%D1%81%D0%BD%D0%BE%D0%B2%D1%8B-%D1%81%D1%82%D0%B0%D1%82%D0%B8%D1%81%D1%82%D0%B8%D0%BA%D0%B8-76/syllabus
+# https://habrahabr.ru/company/stepic/blog/250527/
+# https://habrahabr.ru/post/207750/
+# 
+
+
+
 
 
