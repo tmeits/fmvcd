@@ -18,8 +18,9 @@ plot(train, col = "red")
 #nnet(x, y, weights, size, Wts, mask, linout = FALSE, entropy = FALSE, softmax = FALSE, 
 #     censored = FALSE, skip = FALSE, rang = 0.7, decay = 0, maxit = 100, Hess = FALSE, 
 #     trace = TRUE, MaxNWts = 1000, abstol = 1.0e-4, reltol = 1.0e-8, ...)
-nnet.fit <- nnet(prec~ ., data=train, size=12, na.action = "na.omit",
-                 linout=TRUE, skip=TRUE, MaxNWts=10000, trace=TRUE, maxit=500)
+nnet.fit <- nnet(prec~ ., data=train, size=7, na.action = "na.omit",
+                 linout=TRUE, skip=TRUE, MaxNWts=10000, trace=TRUE, maxit=500,
+                 abstol = 1.0e-4, reltol = 1.0e-8)
 # summarize the fit
 #print(summary(nnet.fit))
 # make predictions
@@ -30,6 +31,7 @@ predictions <- predict(nnet.fit, x, type="raw")
 y <- train[, 2]
 mse <- mean((y - predictions)^2, na.rm = T)
 cat("MSE = ", mse, "\n")
+plot(train[, 2], predictions)
 
 
 #import function from Github
@@ -51,6 +53,9 @@ plot.nnet(nnet.fit)
 
 # https://www.r-bloggers.com/selecting-the-number-of-neurons-in-the-hidden-layer-of-a-neural-network/
 # https://www.r-bloggers.com/visualizing-neural-networks-from-the-nnet-package/
+# https://www.r-bloggers.com/animating-neural-networks-from-the-nnet-package/
+# https://www.r-bloggers.com/sensitivity-analysis-for-neural-networks/
+# https://www.r-bloggers.com/variable-importance-in-neural-networks/
 # https://www.r-bloggers.com/imputing-missing-data-with-expectation-maximization/
 # https://www.r-bloggers.com/what-are-the-best-machine-learning-packages-in-r/
 # http://portal.stats.ox.ac.uk/userdata/ripley/Photos/CorkKerry2015/photos/DSCF0666.jpg
@@ -76,8 +81,14 @@ plot.nnet(nnet.fit)
 # https://stepik.org/course/%D0%9E%D1%81%D0%BD%D0%BE%D0%B2%D1%8B-%D1%81%D1%82%D0%B0%D1%82%D0%B8%D1%81%D1%82%D0%B8%D0%BA%D0%B8-76/syllabus
 # https://habrahabr.ru/company/stepic/blog/250527/
 # https://habrahabr.ru/post/207750/
-# 
 
+# http://www.dissercat.com/content/metod-evolyutsionnogo-nakopleniya-priznakov-dlya-avtomaticheskogo-postroeniya-neironnykh-set
+# http://statsoft.ru/home/textbook/modules/stdatmin.html
+# https://vk.com/page-77692614_48888430
+# https://vk.com/wall-74058720_1808
+# https://vk.com/doc926644_402483592?hash=c4a031c96c3aef7977&dl=b92980d0245b7c5291
+# http://cyberleninka.ru/article/n/modelirovanie-iskusstvennyh-neyronnyh-setey-s-pomoschyu-graficheskogo-adaptera-obschego-naznacheniya
+# https://www.ibm.com/support/knowledgecenter/ru/SSLVMB_24.0.0/spss/neural_network/intro_neuralnet_procedures.html
 
 
 
