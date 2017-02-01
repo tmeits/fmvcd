@@ -1,0 +1,56 @@
+---
+title: "Plot - filling in missing values in climate data"
+output:
+  html_document: default
+  html_notebook: default
+---
+
+```{r read_cli}
+rm(list=ls())
+setwd("C:/Users/teipolykom/git/fmvcd/krest/"); getwd()
+#setwd("Z:/home/larisa/Dropbox/git/fmvcd/krest/"); getwd()
+#setwd("/home/larisa/Dropbox/git/fmvcd/krest/"); getwd()
+file_list <- list.files(pattern = "\\.cli$"); print(file_list)
+
+ for (file in file_list){
+  # if the merged dataset does exist, append to it
+  if (exists("dataset")){
+    temp_dataset <-read.table(file, header=FALSE, sep="")
+    dataset<-rbind(dataset, temp_dataset)
+    rm(temp_dataset)
+  }
+  # if the merged dataset doesn't exist, create it
+  if (!exists("dataset")){
+    dataset <- read.table(file, header=FALSE, sep="")
+  }
+}
+names(dataset) <- c("day", "month", "year", "prec", "temp")
+dataset_krest <- dataset
+```
+####
+```{r plot_all_cli}
+dataset[dataset$prec == -9999, 4] <- NA; 
+dataset[dataset$temp == -9999, 5] <- NA; summary(dataset)
+temp_plot <- data.frame(Days=(1:dim(dataset)[1]), Temp=dataset[, 5]/10.)
+plot(temp_plot, col="red")
+prec_plot <- data.frame(Days=(1:dim(dataset)[1]), Temp=dataset[, 4]/10.)
+plot(prec_plot, col="blue")
+```
+####
+```{r plot_year}
+# Extracing only Unique Rows based on only 3 Column
+matches <- unique(dataset[, 3], incomparables = FALSE, fromLast = FALSE)
+for (i in matches){
+  plot(1: length(dataset[dataset$year == i, 4]), dataset[dataset$year == i, 4]/10., col="blue", main=paste0("Year: ", i),  xlab="Days", ylab="Prec") 
+plot(1: length(dataset[dataset$year == i, 4]), dataset[dataset$year == i, 4]/10., col="blue", main=paste0("Year: ", i),  xlab="Days", ylab="Prec", ylim=c(0, 15))  
+
+print(summary(dataset[dataset$year == i, 4]/10.))
+  plot(1: length(dataset[dataset$year == i, 4]), dataset[dataset$year == i, 5]/10., col="red", main=paste0("Year: ", i),  xlab="Days", ylab="Temp")
+print(summary(dataset[dataset$year == i, 5]/10.))
+}
+```
+####
+```{r link}
+# How do you turn the output of a nnet neural network model into an equation?
+# http://stats.stackexchange.com/questions/163553/how-do-you-turn-the-output-of-a-nnet-neural-network-model-into-an-equation
+```
