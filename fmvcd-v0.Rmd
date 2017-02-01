@@ -48,7 +48,7 @@ krestTemp1969 <- dataset_krest[dataset_krest$year == 1969, 5]
 summary(krestTemp1969) ###
 Temp <- krestTemp1969  / NORM_TEMP
 Time <- (1:length(Temp)) / 370.0
-
+#Time <- 1.0 / (1:length(Temp)) 
 year1966.data <- data.frame(Time, Temp)
 cat("All days=", nrow(year1966.data), "\n")
 cat("Days na.omit=", nrow(na.omit(year1966.data)),"\n")

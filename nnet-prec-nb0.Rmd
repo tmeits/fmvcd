@@ -21,8 +21,10 @@ print(summary(cli_dataset[, c(4)]))
 prec_vector <- cli_dataset[, 4]
 # 
 train_src <- data.frame(time= (1: length(prec_vector)), prec=prec_vector)
-train <- data.frame(time= (1: length(prec_vector)), prec=prec_vector/350.)
+train <- data.frame(time= (1: length(prec_vector))/370., prec=prec_vector/350.)
 
+# What's the activation function used in the nodes of hidden layer from nnet library in R?
+# http://stats.stackexchange.com/questions/78252/whats-the-activation-function-used-in-the-nodes-of-hidden-layer-from-nnet-libra
 #nnet(x, y, weights, size, Wts, mask, linout = FALSE, entropy = FALSE, softmax = FALSE, 
 #     censored = FALSE, skip = FALSE, rang = 0.7, decay = 0, maxit = 100, Hess = FALSE, 
 #     trace = TRUE, MaxNWts = 1000, abstol = 1.0e-4, reltol = 1.0e-8, ...)
@@ -56,4 +58,9 @@ res_src <- data.frame(time=train_src[, 1], prec=pred_src[, 1])
 points(res_src, col="blue")
 # https://www.rstudio.com/resources/cheatsheets/
 # https://habrahabr.ru/post/189726/
+# http://lab.maltewassermann.com/viewport-resizer/
+# https://www.mathworks.com/help/nnet/gs/fit-data-with-a-neural-network.html?requestedDomain=www.mathworks.com
+# https://theclevermachine.wordpress.com/2014/09/11/a-gentle-introduction-to-artificial-neural-networks/
+# http://www.parallelr.com/r-deep-neural-network-from-scratch/
+
 ```
