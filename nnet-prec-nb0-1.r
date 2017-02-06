@@ -53,8 +53,6 @@ y <- test_[, 2]
 mse <- mean((y - predictions)^2, na.rm = T)
 cat("MSE = ", mse, "\n")
 
-
-
 abs_predict <- function(x){
   if(x < 0) return(0)
   else return(x)
