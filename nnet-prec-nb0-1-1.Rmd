@@ -1,0 +1,119 @@
+---
+title: "nnet vs neuralnet for prec"
+output: html_notebook
+---
+
+```{r read}
+# install.packages("plyr")
+# install.packages("FLR")
+# install.packages("raster")
+require(neuralnet); require(tictoc); require(plyr); require(FLR); require(raster)
+rm(list=ls())
+filled_path <- "C:/Users/IVA/Dropbox/Apps/R/"
+#filled_path <- "/home/larisa/Dropbox/Apps/"
+setwd(filled_path); getwd()
+cli_dataset <-read.table("1967.cli", header=FALSE, sep="")
+names(cli_dataset) <- c("day", "month", "year", "prec", "temp");
+cli_dataset[cli_dataset$prec == -9999, 4] <- NA ; prec_vector <- cli_dataset[, 4]; 
+cli_dataset[cli_dataset$temp == -9999, 5] <- NA ; prec_vector <- cli_dataset[, 5]; 
+days_vector<- c((1: length(prec_vector))); print(summary(prec_vector))
+length(days_vector) == length(prec_vector)
+DIV_2 <- F # Убирать ли выбросы в данных
+
+```
+
+```{r utils}
+prec_div2 <- function(x, sh=80){
+  if(x > 100) return(x-sh)
+  else if(x > 170) return(x-sh-sh) 
+  else return(x)
+}
+abs_predict <- function(x){
+  if(x < 0) return(0)
+  else return(x)
+}
+normalize <- function(x) {
+  return ((x-min(x)) / (max(x) - min(x)))
+}
+normalize_ <- function(x) { 
+   x <- sweep(x, 2, apply(x, 2, min)) 
+   sweep(x, 2, apply(x, 2, max), "/") 
+} 
+# test normalize function
+normalize(c(1, 2, 3, 4, 5))
+normalize(c(10, 20, 30, 40, 50))
+
+doit <- function(x) {
+  (x - min(x, na.rm=TRUE))/(max(x,na.rm=TRUE) - min(x, na.rm=TRUE))
+} 
+doit(c(10, 20, 30, NA, 40, 50))
+```
+
+```{r preparing}
+# Preparing to fit the neural network
+data <- na.omit(data.frame(days = days_vector, prec = prec_vector))
+if(DIV_2 == TRUE){
+    prec_vector_div2 <- sapply(data[, 2], prec_div2)
+    data <- data.frame(days = data[, 1], prec = prec_vector_div2)
+} 
+index <- sample(1: nrow(data), round(0.7 * nrow(data)))
+summary(data)
+```
+```{r scale}
+# I chose to use the min-max method and scale the data in the interval [0,1]
+# https://rpubs.com/jlehtoma/norm-test
+# https://cran.r-project.org/web/packages/recommenderlab/recommenderlab.pdf
+maxs <- apply(data, 2, max); mins <- apply(data, 2, min)
+scaled <- as.data.frame(scale(data, center = mins, scale = maxs - mins))
+train_ <- scaled[index,]; test_ <- scaled[-index,]
+```
+
+```{r}
+tic()
+nnet.prec <- neuralnet(prec~days, data=train_, hidden=c(2,4,2), linear.output=T)
+toc()
+plot(nnet.prec)
+```
+
+```{r predict}
+# Predicting perc using the neural network
+comp.prec <- compute(nnet.prec, test_[, 1])
+# Обратное действие - денормализация
+max_ <- max(data$prec); min_ <- min(data$prec)
+cat("max= ", max_, "min= ", min_, "\n")
+comp.prec_ <- comp.prec$net.result * (max_ - min_) + min_
+test.r <- (test_$prec) * (max_ - min_) + min_
+
+MSE.nn <- sum((test.r - comp.prec_)^2)/nrow(test_)
+cat("MSE = ", MSE.nn, "\n")
+
+MSE.nn_ <- sum((test_[, 2] - comp.prec$net.result)^2)/nrow(test_)
+cat("MSE_ = ", MSE.nn_, "\n")
+```
+
+```{r plot}
+par(mfrow=c(2,2))
+
+plot(test_[, 1], comp.prec$net.result, col="red", ylim=c(0,1), xlim=c(0,1))
+points(test_, col="blue")
+
+plot(test_[, 2], comp.prec$net.result, col='red', main='Real vs predicted NN', pch=18, cex=0.7, ylim=c(0,1), xlim=c(0,1))
+abline(0,1,lwd=2)
+abline(0,1, col="blue")
+legend('bottomright',legend='NN',pch=18,col='red', bty='n')
+
+plot(test_[,1], test_[,2]); plot(test_)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
