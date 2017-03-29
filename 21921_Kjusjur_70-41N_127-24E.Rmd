@@ -1,0 +1,74 @@
+---
+title: "21921_Kjusjur_70-41N_127-24E"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r require, include=FALSE}
+require(zoo);require(grnn);require(grt);require(lubridate);require(foreach);require(openxlsx)
+Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe"))  ## path to zip.exe
+```
+
+## 
+
+:
+
+```{r utils, echo=FALSE}
+is.leapyear=function(year){
+  return(((year %% 4 == 0) & (year %% 100 != 0)) | (year %% 400 == 0))
+}
+setZeroNegativeNumber <- function(n){
+  if(n < 0) return(0)
+  else return(n)
+}
+as.zero.negative <- function(vec){
+  return(sapply(vec, setZeroNegativeNumber))
+}
+```
+
+```{r read}
+file.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/21921_Kjusjur_70-41N_127-24E"
+file.name <- "/21921_Kyusyur.1909-2015.aisori.csv"
+df.cli.site <-  read.csv(paste0(file.path, file.name), header = TRUE, sep = ";", dec = ",")  # read Climate
+str(df.cli.site)
+summary(df.cli.site)
+plot(df.cli.site[, c(6)], col="gray")
+plot(df.cli.site[, c(8)], col="gray")
+```
+```{r search_num_na}
+for(i in min(df.cli.site):max(df.cli.site)){
+  
+}
+```
+```{r filled_Kjusjur_prec}
+df.cli.site.period <- df.cli.site[df.cli.site$Year > 1935, ]
+summary(df.cli.site.period)
+df.cli.site.prec <- df.cli.site.period$PRECIP
+plot(df.cli.site.prec , col="green")
+plot(df.cli.site.prec , col="blue")
+cli.site.prec.na <- which(is.na(df.cli.site.prec)) # index in vector
+cli.site.prec.zoo <- as.zero.negative(zoo::na.spline(df.cli.site.prec))
+summary(cli.site.prec.zoo)
+
+for(i in 1:length(cli.site.prec.na)){
+  points(cli.site.prec.na[i], cli.site.prec.zoo[cli.site.prec.na[i]], col="red", pch=19)
+}
+```
+
+```{r filled_Kjusjur_temp}
+cli.site.temp <- df.cli.site.period$TMEAN
+plot(cli.site.temp, col="blue")
+cli.site.temp.na <- which(is.na(cli.site.temp))
+cli.site.temp.zoo <- zoo::na.spline(cli.site.temp)
+summary(cli.site.temp.zoo)
+
+for(i in 1:length(cli.site.temp.na)){
+  points(cli.site.temp.na[i], cli.site.temp.zoo[cli.site.temp.na[i]], col="red", pch=19)
+}
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
