@@ -9,12 +9,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r require, include=FALSE}
-require(zoo);require(grnn);require(grt);require(lubridate);require(foreach);require(openxlsx)
+require(zoo);require(grnn);require(grt);require(lubridate);require(foreach);require(openxlsx); require(imputeTS)
 Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe"))  ## path to zip.exe
+# 
 ```
-
 ## 
-
 :
 
 ```{r utils, echo=FALSE}
@@ -28,34 +27,131 @@ setZeroNegativeNumber <- function(n){
 as.zero.negative <- function(vec){
   return(sapply(vec, setZeroNegativeNumber))
 }
+select.year <- function(years, num){
+  year <- years[years$Year == num, ]
+  return(year)
+}
+select.year.prec <- function(years, num){
+  year <- select.year(years, num)
+  year.prec <- year$PRECIP
+  return(year.prec)
+}
+select.year.temp <- function(years, num){
+  year <- select.year(years, num)
+  year.temp <- year$TMEAN
+  return(year.temp)
+}
 ```
+####  Reading file with climatic data in the format of the site aisori.
+Convert and burn in my form of CVS
 
-```{r read}
-file.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/21921_Kjusjur_70-41N_127-24E"
+My file name format-write station code and name, and then write its coordinates
+```{r}
+
+```
+####
+```{r read_iva}
+file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/21921_Kjusjur_70-41N_127-24E"
+file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/21921_Kjusjur_70-41N_127-24E"
 file.name <- "/21921_Kyusyur.1909-2015.aisori.csv"
-df.cli.site <-  read.csv(paste0(file.path, file.name), header = TRUE, sep = ";", dec = ",")  # read Climate
+df.cli.site <-  read.csv(paste0(file.cli.path, file.name), header = TRUE, sep = ";", dec = ",")  # read Climate
 str(df.cli.site)
 summary(df.cli.site)
 plot(df.cli.site[, c(6)], col="gray")
 plot(df.cli.site[, c(8)], col="gray")
 ```
-```{r search_num_na}
-for(i in min(df.cli.site):max(df.cli.site)){
-  
+####
+```{r plot_NA}
+vec.years <- unique(df.cli.site$Year)
+site.prec.na <- 1:length(vec.years); site.temp.na <- 1:length(vec.years); k <- 1
+for (i in vec.years){
+  names.vec <- c("Min.", "1st Qu.", "Median", "Mean", "3rd Qu.", "Max.", "NA's")
+  site.prec.na[k] <- sum(is.na(select.year.prec(df.cli.site, i)))
+  site.temp.na[k] <- sum(is.na(select.year.temp(df.cli.site, i))); 
+  cat(site.prec.na[k], site.temp.na[k], "\n")
+  k <- k + 1
+}
+# http://tutorials.iq.harvard.edu/R/Rgraphics/Rgraphics.html
+# http://www.sthda.com/english/wiki/ggplot2-scatter-plots-quick-start-guide-r-software-and-data-visualization
+#http://www.sthda.com/english/wiki/ggplot2-barplots-quick-start-guide-r-software-and-data-visualization
+#http://tiramisutes.github.io/2015/09/21/line-ggplots.html
+require(ggplot2)
+plot.prec.na <- data.frame(years=vec.years, prec=site.prec.na)
+ggplot(plot.prec.na, aes(x=years, y=prec)) + 
+  geom_point(color="steelblue", size=3) + geom_rug() +    #  color="red", size=3   #E69F00
+  #theme_minimal() + #theme_classic()
+  labs(title="plot.prec.na") +
+  scale_color_brewer(palette="Paired") + theme_minimal()
+  # scale_color_manual(values=c(&#39;#999999&#39;,&#39;#E69F00&#39;))
+   
+
+plot.temp.na <- data.frame(years=vec.years, temp=site.temp.na)
+ggplot(plot.temp.na, aes(x=years, y=temp)) + 
+  geom_point(color="#b47846", size=3) + geom_rug() +    #  color="red", size=3   #E69F00
+  #theme_minimal() + #theme_classic()  # #4682b4	
+  labs(title="plot.temp.na") +
+  scale_color_brewer(palette="Paired") + theme_minimal()
+  # scale_color_manual(values=c(&#39;#999999&#39;,&#39;#E69F00&#39;))
+   
+```
+####  Print a list of years where the number of missing data is greater than 100. Separately for temperature and precipitation
+```{r print_year_na}
+plot.prec.na[which(plot.prec.na$prec>100),]
+plot.temp.na[which(plot.temp.na$temp>100),]
+```
+#### 
+```{r impute_mean}
+y.2001.prec<-select.year.prec(df.cli.site.period, 2001)
+str(y.2001.prec)
+summary(y.2001.prec)
+y.2005.prec<-select.year.prec(df.cli.site.period, 2005)
+summary(y.2005.prec)
+y.2010.prec<-select.year.prec(df.cli.site.period, 2010)
+summary(y.2010.prec)
+y.2011.prec<-select.year.prec(df.cli.site.period, 2011)
+summary(y.2011.prec)
+
+y.mean <- (y.2005.prec+y.2010.prec+y.2011.prec)/1.5
+df.cli.site.period[df.cli.site.period$Year==2001, 8] <- y.mean
+df.cli.site.period[df.cli.site.period$Year==2002, 8] <- y.mean
+plot(df.cli.site.period[, c(8)])
+
+```
+#### add random noise specified size and character
+```{r add_random_noise}
+
+```
+#### remove from filled (according to the average of all years) year simple feature a number of observations. This will give the grnn function additive smoothing regression.
+```{r use_simple}
+```
+####
+```{r print_summary_all_sites}
+
+for(i in min(df.cli.site$Year):max(df.cli.site$Year)){
+  print(summary(df.cli.site[df.cli.site$Year==i,c(2,6,8)]))
 }
 ```
+####
 ```{r filled_Kjusjur_prec}
 df.cli.site.period <- df.cli.site[df.cli.site$Year > 1935, ]
-summary(df.cli.site.period)
+summary(df.cli.site.period[,c(6,8)])
 df.cli.site.prec <- df.cli.site.period$PRECIP
 plot(df.cli.site.prec , col="green")
 plot(df.cli.site.prec , col="blue")
 cli.site.prec.na <- which(is.na(df.cli.site.prec)) # index in vector
+# http://stackoverflow.com/questions/18695335/replacing-all-nas-with-smoothing-spline
+# https://www.r-bloggers.com/imputing-missing-data-with-r-mice-package/
+# https://cran.r-project.org/web/packages/imputeTS/imputeTS.pdf
 cli.site.prec.zoo <- as.zero.negative(zoo::na.spline(df.cli.site.prec))
+cli.site.prec.kalman <- as.zero.negative(imputeTS::na.kalman(df.cli.site.prec))
 summary(cli.site.prec.zoo)
+summary(cli.site.prec.kalman)
 
 for(i in 1:length(cli.site.prec.na)){
   points(cli.site.prec.na[i], cli.site.prec.zoo[cli.site.prec.na[i]], col="red", pch=19)
+}
+for(i in 1:length(cli.site.prec.na)){
+  points(cli.site.prec.na[i], cli.site.prec.kalman[cli.site.prec.na[i]], col="green", pch=19)
 }
 ```
 
@@ -64,7 +160,10 @@ cli.site.temp <- df.cli.site.period$TMEAN
 plot(cli.site.temp, col="blue")
 cli.site.temp.na <- which(is.na(cli.site.temp))
 cli.site.temp.zoo <- zoo::na.spline(cli.site.temp)
+cli.site.temp.kalman <- imputeTS::na.kalman(cli.site.temp)
+
 summary(cli.site.temp.zoo)
+summary(cli.site.temp.kalman)
 
 for(i in 1:length(cli.site.temp.na)){
   points(cli.site.temp.na[i], cli.site.temp.zoo[cli.site.temp.na[i]], col="red", pch=19)
