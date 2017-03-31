@@ -1,6 +1,8 @@
 ---
 title: "21921_Kjusjur_70-41N_127-24E"
-output: html_document
+output:
+  html_notebook: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -9,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r require, include=FALSE}
+#output: html_document
 require(zoo);require(grnn);require(grt);require(lubridate);require(foreach);require(openxlsx); require(imputeTS)
 Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe"))  ## path to zip.exe
 # 
@@ -46,8 +49,10 @@ select.year.temp <- function(years, num){
 Convert and burn in my form of CVS
 
 My file name format-write station code and name, and then write its coordinates
-```{r}
-
+```{r read_table.aisori}
+file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/21921_Kjusjur_70-41N_127-24E"
+file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/21921_Kjusjur_70-41N_127-24E"
+file.name <- "/21921_Kyusyur.1909-2015.aisori.csv"
 ```
 ####
 ```{r read_iva}
@@ -60,15 +65,19 @@ summary(df.cli.site)
 plot(df.cli.site[, c(6)], col="gray")
 plot(df.cli.site[, c(8)], col="gray")
 ```
-####
+#### Number of gaps in the data by year
+
+In tabicu output only years with nonzero passes. The second column precipitation third temperature
 ```{r plot_NA}
 vec.years <- unique(df.cli.site$Year)
 site.prec.na <- 1:length(vec.years); site.temp.na <- 1:length(vec.years); k <- 1
 for (i in vec.years){
   names.vec <- c("Min.", "1st Qu.", "Median", "Mean", "3rd Qu.", "Max.", "NA's")
   site.prec.na[k] <- sum(is.na(select.year.prec(df.cli.site, i)))
-  site.temp.na[k] <- sum(is.na(select.year.temp(df.cli.site, i))); 
-  cat(site.prec.na[k], site.temp.na[k], "\n")
+  site.temp.na[k] <- sum(is.na(select.year.temp(df.cli.site, i)))
+  if(site.prec.na[k] != 0 | site.temp.na[k] != 0){
+    cat(i, site.prec.na[k], site.temp.na[k], "\n")  
+  }
   k <- k + 1
 }
 # http://tutorials.iq.harvard.edu/R/Rgraphics/Rgraphics.html
@@ -84,7 +93,6 @@ ggplot(plot.prec.na, aes(x=years, y=prec)) +
   scale_color_brewer(palette="Paired") + theme_minimal()
   # scale_color_manual(values=c(&#39;#999999&#39;,&#39;#E69F00&#39;))
    
-
 plot.temp.na <- data.frame(years=vec.years, temp=site.temp.na)
 ggplot(plot.temp.na, aes(x=years, y=temp)) + 
   geom_point(color="#b47846", size=3) + geom_rug() +    #  color="red", size=3   #E69F00
@@ -101,6 +109,9 @@ plot.temp.na[which(plot.temp.na$temp>100),]
 ```
 #### 
 ```{r impute_mean}
+df.cli.site.period <- df.cli.site[df.cli.site$Year > 1935, ]
+summary(df.cli.site.period[,c(6,8)])
+
 y.2001.prec<-select.year.prec(df.cli.site.period, 2001)
 str(y.2001.prec)
 summary(y.2001.prec)
@@ -111,7 +122,26 @@ summary(y.2010.prec)
 y.2011.prec<-select.year.prec(df.cli.site.period, 2011)
 summary(y.2011.prec)
 
+year.filled <- 2000
+if (is.leapyear(year.filled)) { 
+  sum.prec <- rep.int(0, 366)
+} else { 
+  sum.prec <- rep.int(0, 365) }
+
+for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+   if (is.leapyear(i) & is.leapyear(year.filled)){
+     sum.prec <- sum.prec + select.year.prec(df.cli.site.period, i) 
+   } else if (!is.leapyear(i) & is.leapyear(year.filled)){  
+     sum.prec <- sum.prec + c(select.year.prec(df.cli.site.period, i), 0) 
+   } else if (is.leapyear(i) & !is.leapyear(year.filled)){ 
+     # get all the elements of a vector last
+     sum.prec <- sum.prec + select.year.prec(df.cli.site.period, i)
+   }
+}
+plot(sum.prec)
+
 y.mean <- (y.2005.prec+y.2010.prec+y.2011.prec)/1.5
+
 df.cli.site.period[df.cli.site.period$Year==2001, 8] <- y.mean
 df.cli.site.period[df.cli.site.period$Year==2002, 8] <- y.mean
 plot(df.cli.site.period[, c(8)])
@@ -126,9 +156,9 @@ plot(df.cli.site.period[, c(8)])
 ```
 ####
 ```{r print_summary_all_sites}
-
-for(i in min(df.cli.site$Year):max(df.cli.site$Year)){
-  print(summary(df.cli.site[df.cli.site$Year==i,c(2,6,8)]))
+#plot.min.max.all <- 
+for(i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+  print(summary(df.cli.site.period[df.cli.site.period$Year==i,c(2,6,8)]))
 }
 ```
 ####
