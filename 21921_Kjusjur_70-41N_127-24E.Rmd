@@ -108,51 +108,126 @@ plot.prec.na[which(plot.prec.na$prec>100),]
 plot.temp.na[which(plot.temp.na$temp>100),]
 ```
 #### 
-```{r impute_mean}
+```{r impute_prec}
 df.cli.site.period <- df.cli.site[df.cli.site$Year > 1935, ]
-summary(df.cli.site.period[,c(6,8)])
+summary(df.cli.site.period[, c(6, 8)])
 
-y.2001.prec<-select.year.prec(df.cli.site.period, 2001)
-str(y.2001.prec)
-summary(y.2001.prec)
-y.2005.prec<-select.year.prec(df.cli.site.period, 2005)
-summary(y.2005.prec)
-y.2010.prec<-select.year.prec(df.cli.site.period, 2010)
-summary(y.2010.prec)
-y.2011.prec<-select.year.prec(df.cli.site.period, 2011)
-summary(y.2011.prec)
-
-year.filled <- 2000
-if (is.leapyear(year.filled)) { 
-  sum.prec <- rep.int(0, 366)
-} else { 
-  sum.prec <- rep.int(0, 365) }
-
-for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
-   if (is.leapyear(i) & is.leapyear(year.filled)){
-     sum.prec <- sum.prec + select.year.prec(df.cli.site.period, i) 
-   } else if (!is.leapyear(i) & is.leapyear(year.filled)){  
-     sum.prec <- sum.prec + c(select.year.prec(df.cli.site.period, i), 0) 
-   } else if (is.leapyear(i) & !is.leapyear(year.filled)){ 
-     # get all the elements of a vector last
-     sum.prec <- sum.prec + select.year.prec(df.cli.site.period, i)
-   }
+grnn.prec <- function(year.filled, R, K){
+  if (is.leapyear(year.filled)) { 
+    sum.prec <- rep.int(0, 366)
+  } else { 
+    sum.prec <- rep.int(0, 365) }
+  cat("Length ", year.filled, "year= ", length(sum.prec), "\n")
+  #
+  #
+  for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+     #cat("The current leap year ", i, is.leapyear(i), "\n")
+     if (!is.leapyear(i) & is.leapyear(year.filled)){ 
+       #cat("Plus one element\n")
+       prec.now <- c(select.year.prec(df.cli.site.period, i), 0.)
+     } else if (is.leapyear(i) & !is.leapyear(year.filled)){
+        #cat("Minus one element\n")
+        prec.now <- select.year.prec(df.cli.site.period, i)[1:365]
+     } else {
+        #cat("Select all origin elements\n")
+        prec.now <- select.year.prec(df.cli.site.period, i)
+     }
+     
+     for(k in 1:length(sum.prec)){
+       if (!is.na(prec.now [k])){
+          if (prec.now [k] < 4.) {
+              sum.prec[k] <- (sum.prec[k] +  prec.now[k]) / R
+          } else if (prec.now [k] > 11.){
+             #cat(" prec.now [k] > 20. \n")
+             sum.prec[k] <- sum.prec[k] +  prec.now[k] + runif(1, 7, 23)
+          } else {
+            sum.prec[k] <- (sum.prec[k] +  prec.now[k]) / runif(1, 1, K) 
+          }
+       }
+     }
+  }
+  return(sum.prec)
 }
-plot(sum.prec)
+grnn.prec.1974 <- grnn.prec(1974, 2, 1.7)
+plot(grnn.prec.1974)
+grnn.prec.2000 <- grnn.prec(2000, 4, 1.5)
+plot(grnn.prec.2000)
+grnn.prec.2001 <- grnn.prec(2001, 7, 1.9)
+plot(grnn.prec.2001)
+grnn.prec.2002 <- grnn.prec(2002, 5, 2.1)
+plot(grnn.prec.2002)
+#df.cli.site.period[df.cli.site.period$Year==2000, 8] <- sum.prec
 
-y.mean <- (y.2005.prec+y.2010.prec+y.2011.prec)/1.5
+```
+#### 
+```{r impute_temp}
+#df.cli.site.period <- df.cli.site[df.cli.site$Year > 1935, ]
+summary(df.cli.site.period[, c(6, 8)])
 
-df.cli.site.period[df.cli.site.period$Year==2001, 8] <- y.mean
-df.cli.site.period[df.cli.site.period$Year==2002, 8] <- y.mean
-plot(df.cli.site.period[, c(8)])
+grnn.temp <- function(year.filled, R, K){
+  if (is.leapyear(year.filled)) { 
+    sum.temp <- rep.int(0, 366)
+  } else { 
+    sum.temp <- rep.int(0, 365) }
+  cat("Length ", year.filled, "year= ", length(sum.temp), "\n")
+  #
+  #
+  for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+     #cat("The current leap year ", i, is.leapyear(i), "\n")
+     if (!is.leapyear(i) & is.leapyear(year.filled)){ 
+       #cat("Plus one element\n")
+       temp.now <- c(select.year.temp(df.cli.site.period, i), 0.)
+     } else if (is.leapyear(i) & !is.leapyear(year.filled)){
+        #cat("Minus one element\n")
+        temp.now <- select.year.temp(df.cli.site.period, i)[1:365]
+     } else {
+        #cat("Select all origin elements\n")
+        temp.now <- select.year.temp(df.cli.site.period, i)
+     }
+     
+     for(k in 1:length(sum.temp)){
+       if (!is.na(temp.now [k])){
+         sum.temp[k] <- (sum.temp[k] +  temp.now[k]) / runif(1, 1.8, K) 
+       }
+     }
+  }
+  return(sum.temp)
+}
+grnn.temp.1974 <- grnn.temp(1974, 2, 2.2)
+plot(grnn.temp.1974)
+grnn.temp.2000 <- grnn.temp(2000, 2, 2.2)
+plot(grnn.temp.2000)
+grnn.temp.2001 <- grnn.temp(2001, 2, 2.2)
+plot(grnn.temp.2001)
+grnn.temp.2002 <- grnn.temp(2002, 2, 2.2)
+plot(grnn.temp.2002)
 
+```
+####
+```{r insert_new_vectors}
+plot(df.cli.site.period$PRECIP)
+df.cli.site.period[df.cli.site.period$Year==1974, 8] <- grnn.prec.1974
+df.cli.site.period[df.cli.site.period$Year==2000, 8] <- grnn.prec.2000
+df.cli.site.period[df.cli.site.period$Year==2001, 8] <- grnn.prec.2001
+df.cli.site.period[df.cli.site.period$Year==2002, 8] <- grnn.prec.2002
+
+df.cli.site.period[df.cli.site.period$Year==1974, 6] <- grnn.temp.1974
+df.cli.site.period[df.cli.site.period$Year==2000, 6] <- grnn.temp.2000
+df.cli.site.period[df.cli.site.period$Year==2001, 6] <- grnn.temp.2001
+df.cli.site.period[df.cli.site.period$Year==2002, 6] <- grnn.temp.2002
+
+plot(df.cli.site.period$PRECIP)
+summary(df.cli.site.period$PRECIP)
+plot(df.cli.site.period$TMEAN)
+summary(df.cli.site.period$TMEAN)
 ```
 #### add random noise specified size and character
 ```{r add_random_noise}
-
+cat("\n")
 ```
 #### remove from filled (according to the average of all years) year simple feature a number of observations. This will give the grnn function additive smoothing regression.
 ```{r use_simple}
+cat("\n")
 ```
 ####
 ```{r print_summary_all_sites}
@@ -163,7 +238,7 @@ for(i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
 ```
 ####
 ```{r filled_Kjusjur_prec}
-df.cli.site.period <- df.cli.site[df.cli.site$Year > 1935, ]
+#df.cli.site.period <- df.cli.site[df.cli.site$Year > 1935, ]
 summary(df.cli.site.period[,c(6,8)])
 df.cli.site.prec <- df.cli.site.period$PRECIP
 plot(df.cli.site.prec , col="green")
@@ -198,6 +273,26 @@ summary(cli.site.temp.kalman)
 for(i in 1:length(cli.site.temp.na)){
   points(cli.site.temp.na[i], cli.site.temp.zoo[cli.site.temp.na[i]], col="red", pch=19)
 }
+for(i in 1:length(cli.site.temp.na)){
+  points(cli.site.temp.na[i], cli.site.temp.kalman[cli.site.temp.na[i]], col="green", pch=19)
+}
+```
+####
+```{r create_new_data_cli}
+require(openxlsx)
+Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe"))  ## path to zip.exe
+file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/21921_Kjusjur_70-41N_127-24E"
+file.name <- "/21921_Kyusyur.1909-2015.aisori.xlsx"
+Kyusyur <- data.frame(
+  df.cli.site.period[, c(1,2,3,4), ],
+  Temp = round(cli.site.temp.kalman, 2),
+  Prec = round(cli.site.prec.kalman, 2)
+)
+summary(Kyusyur)
+openxlsx::write.xlsx(
+  Kyusyur, 
+  file = paste0(file.cli.path, file.name))
+
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
