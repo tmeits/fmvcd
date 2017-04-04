@@ -2,14 +2,14 @@
 title: "24343_Zhigansk_66-46N_123-24E"
 output: html_notebook
 ---
-#### 
-```{r require, include=FALSE}
+  + <http://www.nws.noaa.gov/dm-cgi-bin/nsd_lookup.pl?station=24343>
+```{r require}
 require(zoo);require(grnn);require(grt);require(lubridate);require(foreach);require(openxlsx); require(imputeTS)
 Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe"))  ## path to zip.exe
 # 
 ```
 
-```{r utils, echo=FALSE}
+```{r utils}
 is.leapyear=function(year){
   return(((year %% 4 == 0) & (year %% 100 != 0)) | (year %% 400 == 0))
 }
@@ -39,9 +39,9 @@ select.year.temp <- function(years, num){
 Convert and burn in my form of CVS
 
 My file name format-write station code and name, and then write its coordinates
-```{r read_table.aisori, echo=FALSE}
-file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/24343_Zhigansk_66-46N_123-24E"
-#file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/24343_Zhigansk_66-46N_123-24E"
+```{r read_table.aisori}
+#file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/24343_Zhigansk_66-46N_123-24E"
+file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/24343_Zhigansk_66-46N_123-24E"
 file.name <- "/24343_Zhigansk.csv"; file.name.xlsx <- "/24343_Zhigansk.xlsx"
 
 aisori.cli <- read.csv(paste0(file.cli.path,file.name), header = FALSE, sep = ";", dec = ".")  # read Climate
@@ -57,7 +57,10 @@ max.prec <- max(df.cli.site$PRECIP, na.rm=T)
 
 plot(df.cli.site[, c(6)], col="gray")
 plot(df.cli.site[, c(8)], col="gray")
-
+plotNA.distribution(df.cli.site[, c(6)]); plotNA.distribution(df.cli.site[, c(8)])
+plotNA.distributionBar(df.cli.site[, c(6)]); plotNA.distributionBar(df.cli.site[, c(8)])
+plotNA.gapsize(df.cli.site[, c(6)]); plotNA.gapsize(df.cli.site[, c(8)]);
+statsNA(df.cli.site[, c(6)]); cat("\n\n\n"); statsNA(df.cli.site[, c(8)])
 ```
 #### Number of gaps in the data by year
 
@@ -204,6 +207,10 @@ plot(df.cli.site.prec , col="blue")
 cli.site.prec.na <- which(is.na(df.cli.site.prec)) # index in vector
 cli.site.prec.zoo <- as.zero.negative(zoo::na.spline(df.cli.site.prec))
 cli.site.prec.kalman <- as.zero.negative(imputeTS::na.kalman(df.cli.site.prec))
+
+cli.site.prec.int <- na.interpolation(df.cli.site.prec, option ="stine")
+plotNA.imputations(df.cli.site.prec, cli.site.prec.int)
+
 summary(cli.site.prec.zoo)
 summary(cli.site.prec.kalman)
 
@@ -222,6 +229,9 @@ plot(cli.site.temp, col="blue")
 cli.site.temp.na <- which(is.na(cli.site.temp))
 cli.site.temp.zoo <- zoo::na.spline(cli.site.temp)
 cli.site.temp.kalman <- imputeTS::na.kalman(cli.site.temp)
+
+cli.site.temp.int <- na.interpolation(cli.site.temp)
+plotNA.imputations( cli.site.temp, cli.site.temp.int)
 
 summary(cli.site.temp.zoo)
 summary(cli.site.temp.kalman)
@@ -268,15 +278,25 @@ write.table.vso <- function(year.cli, filled_path, file_name){
   write.table(year.cli, file = paste(filled_path,file_name, sep=""),
               row.names=FALSE, col.names=FALSE, sep="\t")
 }
-
-y1939 <- get_one_year_vso(kara_turek, 1939)
-summary(y1939)
-write.table.vso(y1939, file.cli.path, "/1939.CLI")
-y1978 <- get_one_year_vso(kara_turek, 1978)
-summary(y1978)
-write.table.vso(y1978, file.cli.path, "/1978.CLI")
-y1979 <- get_one_year_vso(kara_turek, 1979)
-summary(y1979)
-write.table.vso(y1979, file.cli.path, "/1979.CLI")
+#
+for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+  cat("Write .CLI file= ", paste0(i,".CLI"), "\n")
+  df.vso.i <- get_one_year_vso(df.vso, i)
+  summary(df.vso.i)
+  write.table.vso(df.vso.i, file.cli.path, paste0("/", i, ".CLI"))
+}
 # https://www.rdocumentation.org/packages/BBmisc/versions/1.10
+# https://github.com/cran/hydroGOF/blob/master/R/rmse.R
+```
+```{r}
+n <- 100
+#' set.seed(1)
+#' x <- runif(n, -2, 2)
+#' y0 <- x^3
+#' epsilon <- rnorm(n, 0, .1)
+#' y <- y0 + epsilon
+#' grnn <- learn(data.frame(y,x))
+#' grnn <- smooth(grnn, sigma=0.1)
+#' guess(grnn, -2)
+#' guess(grnn, -1)
 ```

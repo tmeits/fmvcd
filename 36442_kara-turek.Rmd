@@ -3,13 +3,14 @@ title: "36442 kara-turek"
 output: html_notebook
 ---
 #### 
+  + <https://www.youtube.com/watch?v=JA98rkpT_Dk>
 ```{r require, include=FALSE}
 require(zoo);require(grnn);require(grt);require(lubridate);require(foreach);require(openxlsx); require(imputeTS)
 Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe"))  ## path to zip.exe
 # 
 ```
 
-```{r utils, echo=FALSE}
+```{r utils}
 is.leapyear=function(year){
   return(((year %% 4 == 0) & (year %% 100 != 0)) | (year %% 400 == 0))
 }
@@ -39,7 +40,7 @@ select.year.temp <- function(years, num){
 Convert and burn in my form of CVS
 
 My file name format-write station code and name, and then write its coordinates
-```{r read_table.aisori, echo=FALSE}
+```{r read_table.aisori}
 file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
 file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
 file.name <- "/SCH31.txt"; file.name.xlsx <- "/36442_kara-turek.xlsx"
@@ -52,7 +53,15 @@ str(df.cli.site)
 summary(df.cli.site)
 plot(df.cli.site[, c(6)], col="gray")
 plot(df.cli.site[, c(8)], col="gray")
-
+plotNA.distribution(df.cli.site[, c(6)]); plotNA.distribution(df.cli.site[, c(8)])
+plotNA.distributionBar(df.cli.site[, c(6)]); plotNA.distributionBar(df.cli.site[, c(8)])
+plotNA.gapsize(df.cli.site[, c(6)]); plotNA.gapsize(df.cli.site[, c(8)]); 
+statsNA(df.cli.site[, c(6)]); cat("\n\n\n"); statsNA(df.cli.site[, c(8)])
+min.temp <- min(df.cli.site$TMEAN, na.rm=T)
+max.temp <- max(df.cli.site$TMEAN, na.rm=T)
+min.prec <- min(df.cli.site$PRECIP, na.rm=T)
+max.prec <- max(df.cli.site$PRECIP, na.rm=T)
+# https://github.com/SteffenMoritz/imputeR/blob/master/R/impute.R
 ```
 #### Number of gaps in the data by year
 
@@ -115,6 +124,14 @@ grnn.prec <- function(year.filled, R, K){
        }
      }
   }
+  for(k in 1:length(sum.prec)){
+    if (!is.na(sum.prec [k])){
+      if ( sum.prec[k] > max.prec)
+        sum.prec[k] <- max.prec
+      if (sum.prec[k] < min.prec)
+        sum.prec[k] <- min.prec
+    } else { stop("*** ERROR grnn.prec - result is.na TRUE") }
+  }
   return(sum.prec)
 }
 grnn.prec.1939 <- grnn.prec(1939, 2, 1.7)
@@ -150,10 +167,18 @@ grnn.temp <- function(year.filled, R, K){
        }
      }
   }
+  for(k in 1:length(sum.temp)){
+    if (!is.na(sum.temp [k])){
+      if ( sum.temp[k] > max.temp)
+        sum.temp[k] <- max.temp
+      if (sum.temp[k] < min.temp)
+        sum.temp[k] <- min.temp
+    } else { stop("*** ERROR grnn.temp - result is.na TRUE") }
+  }
   return(sum.temp)
 }
 
-grnn.temp.1939 <- grnn.temp(1939, 1.05 ,2.1)
+grnn.temp.1939 <- grnn.temp(1939, 1.3 ,2.3)
 plot(grnn.temp.1939)
 grnn.temp.1978 <- grnn.temp(1978, 1.5 ,2.0)
 plot(grnn.temp.1978)
@@ -162,7 +187,7 @@ plot(grnn.temp.1979)
 
 ```
 #### Replacing missing values by year
-```{r insert_new_vectors, echo=FALSE}
+```{r insert_new_vectors}
 plot(df.cli.site.period$PRECIP)
 df.cli.site.period[df.cli.site.period$Year==1939, 8] <- grnn.prec.1939
 df.cli.site.period[df.cli.site.period$Year==1978, 8] <- grnn.prec.1978
@@ -172,10 +197,11 @@ df.cli.site.period[df.cli.site.period$Year==1939, 6] <- grnn.temp.1939
 df.cli.site.period[df.cli.site.period$Year==1978, 6] <- grnn.temp.1978
 df.cli.site.period[df.cli.site.period$Year==1979, 6] <- grnn.temp.1979
 
-
 plot(df.cli.site.period$PRECIP)
+plotNA.distribution(df.cli.site.period$PRECIP)
 summary(df.cli.site.period$PRECIP)
 plot(df.cli.site.period$TMEAN)
+plotNA.distribution(df.cli.site.period$TMEAN)
 summary(df.cli.site.period$TMEAN)
 ```
 #### Application of neural network algorithm for all observations for this station
@@ -187,7 +213,9 @@ plot(df.cli.site.prec , col="green")
 plot(df.cli.site.prec , col="blue")
 cli.site.prec.na <- which(is.na(df.cli.site.prec)) # index in vector
 cli.site.prec.zoo <- as.zero.negative(zoo::na.spline(df.cli.site.prec))
-cli.site.prec.kalman <- as.zero.negative(imputeTS::na.kalman(df.cli.site.prec))
+cli.site.prec.kalman <- as.zero.negative(
+  imputeTS::na.kalman(df.cli.site.prec, model = "auto.arima", smooth = TRUE))
+
 summary(cli.site.prec.zoo)
 summary(cli.site.prec.kalman)
 
@@ -197,6 +225,7 @@ for(i in 1:length(cli.site.prec.na)){
 for(i in 1:length(cli.site.prec.na)){
   points(cli.site.prec.na[i], cli.site.prec.kalman[cli.site.prec.na[i]], col="green", pch=19)
 }
+plotNA.distribution(df.cli.site.prec)
 ```
 #### Application of neural network algorithm for all observations for this station
 filled_temp
@@ -204,8 +233,8 @@ filled_temp
 cli.site.temp <- df.cli.site.period$TMEAN
 plot(cli.site.temp, col="blue")
 cli.site.temp.na <- which(is.na(cli.site.temp))
-cli.site.temp.zoo <- zoo::na.spline(cli.site.temp)
-cli.site.temp.kalman <- imputeTS::na.kalman(cli.site.temp)
+cli.site.temp.zoo <- na.interpolation(cli.site.temp) #zoo::na.spline(cli.site.temp)
+cli.site.temp.kalman <- imputeTS::na.kalman(cli.site.temp, smooth = T)
 
 summary(cli.site.temp.zoo)
 summary(cli.site.temp.kalman)
@@ -216,26 +245,27 @@ for(i in 1:length(cli.site.temp.na)){
 for(i in 1:length(cli.site.temp.na)){
   points(cli.site.temp.na[i], cli.site.temp.kalman[cli.site.temp.na[i]], col="green", pch=19)
 }
+plotNA.distribution(cli.site.temp)
 ```
 #### Write the results in Excel format
-```{r create_new_data_cli, echo=FALSE}
+```{r create_new_data_cli}
 require(openxlsx)
 
-kara_turek <- data.frame(
+df.vso <- data.frame(
   df.cli.site.period[, c(1,2,3,4), ],
   Temp = round(cli.site.temp.kalman, 2),
   Prec = round(cli.site.prec.kalman, 2)
 )
-summary(kara_turek)
+summary(df.vso)
 openxlsx::write.xlsx(
-  kara_turek, 
+  df.vso, 
   file = paste0(file.cli.path, file.name.xlsx))
 #save(kara_turek, file = paste0(file.cli.path,"/kara_turek.Rdata"))
 
 ```
 
 #### Record one year climate data in the format model Vaganova Shashkina
-```{r , echo=FALSE}
+```{r writeVSO}
 #Reading climatic data in one year. Format VSO
 get_one_year_vso <- function(years, now) {
   one_year <- years[years$Year == now, ]
@@ -252,15 +282,12 @@ write.table.vso <- function(year.cli, filled_path, file_name){
   write.table(year.cli, file = paste(filled_path,file_name, sep=""),
               row.names=FALSE, col.names=FALSE, sep="\t")
 }
-
-y1939 <- get_one_year_vso(kara_turek, 1939)
-summary(y1939)
-write.table.vso(y1939, file.cli.path, "/1939.CLI")
-y1978 <- get_one_year_vso(kara_turek, 1978)
-summary(y1978)
-write.table.vso(y1978, file.cli.path, "/1978.CLI")
-y1979 <- get_one_year_vso(kara_turek, 1979)
-summary(y1979)
-write.table.vso(y1979, file.cli.path, "/1979.CLI")
 #
+for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+  cat("Write .CLI file= ", paste0(i,".CLI"), "\n")
+  df.vso.i <- get_one_year_vso(df.vso, i)
+  summary(df.vso.i)
+  write.table.vso(df.vso.i, file.cli.path, paste0("/VSO/", i, ".CLI"))
+}
+# https://www.rdocumentation.org/packages/BBmisc/versions/1.10
 ```
