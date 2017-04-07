@@ -1,10 +1,11 @@
 ---
-title: "36442 kara-turek"
+title: "36442 kara-turek blank years"
 output: html_notebook
 ---
 #### 
   + <https://www.youtube.com/watch?v=JA98rkpT_Dk>
-```{r require, include=FALSE}
+```{r require}
+# rm(list=ls())
 require(grnn); require(grt); require(openxlsx); require(imputeTS)
 Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe")) 
 ```
@@ -35,6 +36,7 @@ select.year.temp <- function(years, num){
   return(year.temp)
 }
 ```
+####
 ```{r na_grnn}
 require(grnn); require(grt); require(foreach); require(imputeTS)
 
@@ -87,8 +89,8 @@ My file name format-write station code and name, and then write its coordinates
 + Displaying statistics and rendering passes in the data
  
 ```{r read_table.aisori}
-file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
-#file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
+#file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
+file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
 file.name <- "/SCH31.txt"; file.name.xlsx <- "/36442_kara-turek.xlsx"
 
 kara_turek.cli <- read.csv(paste0(file.cli.path,file.name), header = FALSE, sep = ";", dec = ".") 
@@ -171,7 +173,7 @@ cut.emissions <- function (generated.vector, min.value, max.value){
   }
   return (generated.vector)
 }
-grnn.prec <- function(year.filled, R, K){
+mean0.prec <- function(year.filled, R, K){
   sum.prec <- number.days.year(year.filled)
   cat("Length ", year.filled, "year= ", length(sum.prec), "\n")
   for (i in these.years){
@@ -190,28 +192,36 @@ grnn.prec <- function(year.filled, R, K){
   }
   return(cut.emissions(sum.prec, min.prec, max.prec))
 }
+grnn.prec <- function(year, R, K){
+  prec.year <- mean0.prec(year, R, K)
+  plot(prec.year, col="red", main= paste0(year), ylab="Prec(mm)", xlab="Days")
+  prec.year[sample(110:250,4)] <- runif(4, 11,29)
+  points(prec.year, col="green")
+  prec.year <- na.sample(prec.year)
+  points(prec.year, col="yellow")
+  prec.year <- na.grnn(prec.year, 0.01)
+  prec.year[sample(c(110:150),1)] <- runif(1, 29,31)
+  prec.year[which.max(prec.year)] <- runif(1, 19,37)
+  points(prec.year, col="blue")
+  legend("topleft", legend=c("mean0", "sample0", "na", "na.grnn"),  
+         col=c("red", "green", "yellow", "blue"), pch=c(1,1,1,1), cex=0.8)
+  return(prec.year)
+}
 
-grnn.prec.1939 <- grnn.prec(1939, 2, 1.7)
-plot(grnn.prec.1939, col="red")
-grnn.prec.1939[sample(120:250,7)] <- runif(7, 15,35)
-points(grnn.prec.1939, col="orange")
-grnn.prec.1939.na <- na.sample(grnn.prec.1939)
-plot(grnn.prec.1939, col="red")
-grnn.prec.1939.grnn <- na.grnn(grnn.prec.1939.na, 0.0025)
-points(grnn.prec.1939.grnn, col="green")
-points(grnn.prec.1939.na, col="blue")
+grnn.prec.1978 <- grnn.prec(1978, 3, 2.6)
+#plot(grnn.prec.1978)
+grnn.prec.1939 <- grnn.prec(1939, 5, 1.6)
+#plot(grnn.prec.1939)
+grnn.prec.1979 <- grnn.prec(1979, 2, 1.2)
+#plot(grnn.prec.1979)
 
-grnn.prec.1978 <- grnn.prec(1978, 4, 1.5)
-plot(grnn.prec.1978)
-grnn.prec.1979 <- grnn.prec(1979, 7, 1.9)
-plot(grnn.prec.1979)
 ```
 #### Fill-in temperature and precipitation. There is no data for the entire year.
   + Print-filled year that completely lacked
 ```{r impute_temp, echo=FALSE}
 summary(df.cli.site.period[, c(6, 8)])
 
-grnn.temp <- function(year.filled, R, K){
+mean0.temp <- function(year.filled, R, K){
   if (is.leapyear(year.filled)) { 
     sum.temp <- rep.int(0, 366)
   } else { 
@@ -244,12 +254,26 @@ grnn.temp <- function(year.filled, R, K){
   return(sum.temp)
 }
 
+grnn.temp <- function(year, R, K){
+  temp.year <- mean0.temp(year, R, K)
+  plot(temp.year, col="red", main= paste0(year), ylab="Prec(mm)", xlab="Days")
+  temp.year[sample(160:250,17)] <- runif(17, 9,19)
+  points(temp.year, col="green")
+  temp.year <- na.sample(temp.year)
+  points(temp.year, col="yellow")
+  temp.year <- na.grnn(temp.year, 0.0045)
+  points(temp.year, col="blue")
+  legend("topleft", legend=c("mean0", "sample0", "na", "na.grnn"),  
+         col=c("red", "green", "yellow", "blue"), pch=c(1,1,1,1), cex=0.8)
+  return(temp.year)
+}
+
 grnn.temp.1939 <- grnn.temp(1939, 1.3 ,2.3)
-plot(grnn.temp.1939)
+#plot(grnn.temp.1939)
 grnn.temp.1978 <- grnn.temp(1978, 1.5 ,2.0)
-plot(grnn.temp.1978)
+#plot(grnn.temp.1978)
 grnn.temp.1979 <- grnn.temp(1979, 1.2 ,2.2)
-plot(grnn.temp.1979)
+#plot(grnn.temp.1979)
 
 ```
 #### Replacing missing values by year
