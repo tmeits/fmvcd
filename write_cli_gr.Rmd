@@ -1,0 +1,82 @@
+---
+title: "Recording climatic data from the Excel spreadsheet program fortranovskoj format version 5"
+output: html_notebook
+---
+
+####
+```{r}
+require(lubridate); require(openxlsx); require(readxl); require(imputeTS)
+Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe"))
+
+cli.path <- "C:/Users/IVA/Dropbox/Apps/china/LZ"
+cli.path.sdl <- "C:/Users/IVA/Dropbox/Apps/china/SDL"
+file.cli.sdl <- "Meterorological data.xls"
+file.cli <- "/LZ daily data.xlsx"
+file.cli.perc <- "LZ daily data.xlsx - p.csv"; file.cli.temp <- "LZ daily data.xlsx - t.csv"
+print("end.")
+
+prec <- read_excel(paste0(cli.path, file.cli), sheet = "p")
+#str(prec); summary(prec)
+temp <- read_excel(paste0(cli.path, file.cli), sheet = "t")
+#str(temp); summary(temp)
+r <- c("Stationsname        Lati.Long.Alti.", 
+          "D  Mo Year  Min.  Max. Mean   Sunshine      Daily          Mean", 
+          "*          Temp. Temp. Cloud  Abs.  Rel. Prec. Trans Press Temp. Humid", 
+          "*                      Cover", 
+          "*          /10 C /10 C /10   /10 h   %   /10mm /10mm/10hPa /10 C   %", 
+          "1969", #6
+          "  7062 14788 -9999", #7 
+       "coku") #8
+```
+```{r}
+# save(y50,y52, file = "C:/Users/IVA/Dropbox/Apps/china/LZ/y50y52.RData")
+non.leap <- 
+```
+####
+```{r}
+name.station <- "lz"
+for(i in names(temp)){
+  fileConn<-file(paste0(cli.path, "/", name.station, i, ".cli"), open="w")
+  r[6] <- i
+  #r[7] <- ; r[8] <- ; r[9] <-
+  r[8] <- name.station
+  writeLines(r, fileConn)
+  if (leap_year(as.integer(i)))
+    num.days <- 366
+  else  
+    num.days <- 365
+  day <- 1; month <- 1
+  for(k in 1:num.days){
+    cli.line <- rep("-9999",14); cli.line[14] <- "\n"
+    cli.line[3] <- as.integer(i) 
+    if (leap_year(as.integer(i)) && month == 2){
+      if (day < 28) day <- day + 1
+      else day <- 1
+    }
+    if (!leap_year(as.integer(i)) && month == 2){
+      if (day < 27) day <- day + 1
+      else day <- 1
+    }
+    cli.line[1] <- as.integer(day) 
+    cli.line <- paste0(cli.line)
+    writeLines(cli.line, con = fileConn, sep="")
+  }
+  close(fileConn)
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
