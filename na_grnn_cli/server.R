@@ -7,10 +7,15 @@ library(reshape2)
 library(imputeTS)
 require(grt)
 require(foreach)
+library(shinyjs)
+require(lubridate)
+
 # load IVA_scripts
 source("zoo_spline_cli3.R")
 #source("na_grnn_cli01.R")
 source("na_grnn_cli3.R")
+source("na_grnn.R")
+
 createDF <- function(fileName){
   cli_dataset <-read.table(fileName, header=FALSE, sep="")
   names(cli_dataset) <- c("day", "month", "year", "prec", "temp");
@@ -25,25 +30,25 @@ file_name <- '1967.cli'; krest1967 <- createDF(file_name)
 file_name <- '1969.cli'; krest1969 <- createDF(file_name)
 ##
 shinyServer(
-function(input, output, session) {
+  function(input, output, session) {
   # https://github.com/daattali/shinyjs/blob/master/inst/examples/basic/app.R
   # http://deanattali.com/shinyjs/
+  
   observeEvent(input$button, {
-    toggle("myslider")
-    
+    toggle("countTest")
   })
-  observeEvent(input$button2, {
-    toggle("myslider")
-    #toggle("countTest")
-    
-  })
+ 
   observeEvent(input$manualSigma, {
     if(input$manualSigma == TRUE){
-      shinyjs::hide("countTest")
+      shinyjs::hide("countPrecTest")
+      shinyjs::hide("countTempTest")
       shinyjs::show("sigmaPrecGRNN")
+      shinyjs::show("sigmaTempGRNN")
     }else{
       shinyjs::hide("sigmaPrecGRNN")
-      shinyjs::show("countTest")
+      shinyjs::hide("sigmaTempGRNN")
+      shinyjs::show("countPrecTest")
+      shinyjs::show("countTempTest")
     }
   })
   #
@@ -101,16 +106,15 @@ function(input, output, session) {
       cat("***\n")
       summary(currentFileInput())
   })
-  
   ################################
   output$precNA <-renderPlot({
     if(input$replaceNA == "GRNN"){
       if(input$manualSigma == TRUE){
         na.na.grnn <- na.grnn.cli(currentFileInput()
-                                  , input$countTest, input$sigmaPrecGRNN, FALSE, FALSE)
+                                  , input$countPrecTest, input$sigmaPrecGRNN, FALSE, FALSE)
       }else{
         na.na.grnn <- na.grnn.cli(currentFileInput()
-                                  , input$countTest, 0.01, TRUE, FALSE)
+                                  , input$countPrecTest, 0.01, TRUE, FALSE)
       }
       #par(mfrow=c(2,1))
       plotPrecFilled(currentFileInput(), na.na.grnn, 
@@ -136,10 +140,10 @@ function(input, output, session) {
     if(input$replaceNA == "GRNN"){
       if(input$manualSigma == TRUE){
         na.na.grnn <- na.grnn.cli(currentFileInput()
-                                  , input$countTest, input$sigmaTempGRNN, FALSE, FALSE)
+                                  , input$countTempTest, input$sigmaTempGRNN, FALSE, FALSE)
       }else{
         na.na.grnn <- na.grnn.cli(currentFileInput()
-                                  , input$countTest, 0.01, TRUE, FALSE)
+                                  , input$countTempTest, 0.01, TRUE, FALSE)
       }
       
       #par(mfrow=c(2,1))
@@ -228,7 +232,7 @@ function(input, output, session) {
   output$contentsPlotPrec <- renderPlot({
     plot(datasetInput()[,1],datasetInput()[,2], col="red")
   })
-  #
+  # 
   output$tableCli <- renderDataTable({
     currentFileInput()
     #datasetInput()
@@ -241,7 +245,8 @@ function(input, output, session) {
     content = function(file) {
       write.csv(datasetInput(), file)
     }
-  )
+  ) 
+
   output$downloadData <- downloadHandler(
     filename = function() { 
       paste(getNameFileCli(), '.filled', sep='') 
@@ -250,9 +255,16 @@ function(input, output, session) {
       # filled na.spline.cli(currentFileInput())
       # na.grnn.cli(currentFileInput()
       #, input$countTest, 0.01, TRUE, FALSE)
-      write.csv(currentFileInput(), file)
+      write.csv(na.spline.cli(currentFileInput()), file)
       #write.csv(na.grnn.cli(currentFileInput(), input$countTest, 0.01, FALSE, FALSE), file)
     }
   ) # currentFileInput(), na.na, paste0(getNameFileCli()
-})
+
+  output$frameShinyJS <- renderUI({ # https://shiny.rstudio.com/articles/tag-glossary.html
+    demoShinyJS <- tags$iframe(src="https://daattali.com/shiny/shinyjs-mini-demo/", height=600, width=900)
+    print(demoShinyJS)
+    demoShinyJS
+  })
+  
+  })
 

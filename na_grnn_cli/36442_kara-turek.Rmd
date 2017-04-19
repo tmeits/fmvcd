@@ -1,0 +1,367 @@
+---
+title: "36442 kara-turek"
+output: html_notebook
+---
+#### 
+  + <https://www.youtube.com/watch?v=JA98rkpT_Dk>
+```{r require, include=FALSE}
+require(zoo);require(grnn);require(grt);require(lubridate);require(foreach);require(openxlsx); require(imputeTS)
+Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe"))  ## path to zip.exe
+# 
+```
+
+```{r utils}
+is.leapyear=function(year){
+  return(((year %% 4 == 0) & (year %% 100 != 0)) | (year %% 400 == 0))
+}
+setZeroNegativeNumber <- function(n){
+  if(n < 0) return(0)
+  else return(n)
+}
+as.zero.negative <- function(vec){
+  return(sapply(vec, setZeroNegativeNumber))
+}
+select.year <- function(years, num){
+  year <- years[years$Year == num, ]
+  return(year)
+}
+select.year.prec <- function(years, num){
+  year <- select.year(years, num)
+  year.prec <- year$PRECIP
+  return(year.prec)
+}
+select.year.temp <- function(years, num){
+  year <- select.year(years, num)
+  year.temp <- year$TMEAN
+  return(year.temp)
+}
+```
+####  Reading file with climatic data in the format of the site aisori. Convert and burn in my form of CVS
+
+My file name format-write station code and name, and then write its coordinates
+
++ Original format aisori
++ Convert table by extraneous columns and giving the names of the remaining
++ View downloaded data standard
++ Displaying statistics and rendering passes in the data
+ 
+```{r read_table.aisori}
+file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
+file.cli.path <- "C:/Users/IVA/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
+file.name <- "/SCH31.txt"; file.name.xlsx <- "/36442_kara-turek.xlsx"
+
+kara_turek.cli <- read.csv(paste0(file.cli.path,file.name), header = FALSE, sep = ";", dec = ".")  # read Climate
+
+str(kara_turek.cli)
+
+kara_turek.cli <- kara_turek.cli[-c(5, 7, 9, 11, 13, 14)]  # we delete excess columns
+kara_turek.cli <- setNames(kara_turek.cli, c("Station", "Year", "Month", "Day", "TMIN", "TMEAN", "TMAX", "PRECIP")) # Assign columns names
+df.cli.site <- kara_turek.cli
+str(df.cli.site)
+summary(df.cli.site)
+plot(df.cli.site[, c(6)], col="gray")
+plot(df.cli.site[, c(8)], col="gray")
+plotNA.distribution(df.cli.site[, c(6)]); plotNA.distribution(df.cli.site[, c(8)])
+plotNA.distributionBar(df.cli.site[, c(6)]); plotNA.distributionBar(df.cli.site[, c(8)])
+plotNA.gapsize(df.cli.site[, c(6)]); plotNA.gapsize(df.cli.site[, c(8)]); 
+statsNA(df.cli.site[, c(6)]); cat("\n\n\n"); statsNA(df.cli.site[, c(8)])
+min.temp <- min(df.cli.site$TMEAN, na.rm=T)
+max.temp <- max(df.cli.site$TMEAN, na.rm=T)
+min.prec <- min(df.cli.site$PRECIP, na.rm=T)
+max.prec <- max(df.cli.site$PRECIP, na.rm=T)
+# https://github.com/SteffenMoritz/imputeR/blob/master/R/impute.R
+```
+#### Number of gaps in the data by year
+
+In tabicu output only years with nonzero passes. The second column precipitation third temperature
+```{r plot_NA, echo=FALSE}
+vec.years <- unique(df.cli.site$Year)
+site.prec.na <- 1:length(vec.years); site.temp.na <- 1:length(vec.years); k <- 1
+for (i in vec.years){
+  site.prec.na[k] <- sum(is.na(select.year.prec(df.cli.site, i)))
+  site.temp.na[k] <- sum(is.na(select.year.temp(df.cli.site, i)))
+  if(site.prec.na[k] != 0 | site.temp.na[k] != 0){
+    cat(i, site.prec.na[k], site.temp.na[k], "\n")  
+  }
+  k <- k + 1
+}
+require(ggplot2)
+plot.prec.na <- data.frame(years=vec.years, prec=site.prec.na)
+ggplot(plot.prec.na, aes(x=years, y=prec)) + 
+  geom_point(color="steelblue", size=3) + geom_rug() +
+  labs(title="plot.prec.na") +
+  scale_color_brewer(palette="Paired") + theme_minimal()
+
+plot.temp.na <- data.frame(years=vec.years, temp=site.temp.na)
+ggplot(plot.temp.na, aes(x=years, y=temp)) + 
+  geom_point(color="#b47846", size=3) + geom_rug() +
+  labs(title="plot.temp.na") +
+  scale_color_brewer(palette="Paired") + theme_minimal()
+
+```
+#### Fill-in temperature and precipitation. There is no data for the entire year.
+  + Print-filled year that completely lacked
+  + TODO
+    + Use the nearby weather station
+    + Use tree-ring growth indices
+```{r impute_prec, echo=FALSE}
+df.cli.site.period <- df.cli.site[df.cli.site$Year > 1938, ]
+summary(df.cli.site.period[, c(6, 8)])
+
+grnn.prec <- function(year.filled, R, K){
+  if (is.leapyear(year.filled)) { 
+    sum.prec <- rep.int(0, 366)
+  } else { 
+    sum.prec <- rep.int(0, 365) }
+  cat("Length ", year.filled, "year= ", length(sum.prec), "\n")
+
+  for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+     if (!is.leapyear(i) & is.leapyear(year.filled)){ 
+       prec.now <- c(select.year.prec(df.cli.site.period, i), 0.)
+     } else if (is.leapyear(i) & !is.leapyear(year.filled)){
+        prec.now <- select.year.prec(df.cli.site.period, i)[1:365]
+     } else { 
+        prec.now <- select.year.prec(df.cli.site.period, i)
+     }
+     
+     for(k in 1:length(sum.prec)){
+       if (!is.na(prec.now [k])){
+          if (prec.now [k] < 4.) {
+              sum.prec[k] <- (sum.prec[k] +  prec.now[k]) / R
+          } else if (prec.now [k] > 11.){
+             sum.prec[k] <- sum.prec[k] +  prec.now[k] + runif(1, 7, 23)
+          } else {
+            sum.prec[k] <- (sum.prec[k] +  prec.now[k]) / runif(1, 1, K) 
+          }
+       }
+     }
+  }
+  for(k in 1:length(sum.prec)){
+    if (!is.na(sum.prec [k])){
+      if ( sum.prec[k] > max.prec)
+        sum.prec[k] <- max.prec
+      if (sum.prec[k] < min.prec)
+        sum.prec[k] <- min.prec
+    } else { stop("*** ERROR grnn.prec - result is.na TRUE") }
+  }
+  return(sum.prec)
+}
+grnn.prec.1939 <- grnn.prec(1939, 2, 1.7)
+plot(grnn.prec.1939)
+grnn.prec.1978 <- grnn.prec(1978, 4, 1.5)
+plot(grnn.prec.1978)
+grnn.prec.1979 <- grnn.prec(1979, 7, 1.9)
+plot(grnn.prec.1979)
+```
+#### Fill-in temperature and precipitation. There is no data for the entire year.
+  + Print-filled year that completely lacked
+```{r impute_temp, echo=FALSE}
+summary(df.cli.site.period[, c(6, 8)])
+
+grnn.temp <- function(year.filled, R, K){
+  if (is.leapyear(year.filled)) { 
+    sum.temp <- rep.int(0, 366)
+  } else { 
+    sum.temp <- rep.int(0, 365) }
+  cat("Length ", year.filled, "year= ", length(sum.temp), "\n")
+
+  for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+     if (!is.leapyear(i) & is.leapyear(year.filled)){ 
+       temp.now <- c(select.year.temp(df.cli.site.period, i), 0.)
+     } else if (is.leapyear(i) & !is.leapyear(year.filled)){
+        temp.now <- select.year.temp(df.cli.site.period, i)[1:365]
+     } else {
+        temp.now <- select.year.temp(df.cli.site.period, i)
+     }
+     
+     for(k in 1:length(sum.temp)){
+       if (!is.na(temp.now [k])){
+         sum.temp[k] <- (sum.temp[k] +  temp.now[k]) / runif(1, R, K) 
+       }
+     }
+  }
+  for(k in 1:length(sum.temp)){
+    if (!is.na(sum.temp [k])){
+      if ( sum.temp[k] > max.temp)
+        sum.temp[k] <- max.temp
+      if (sum.temp[k] < min.temp)
+        sum.temp[k] <- min.temp
+    } else { stop("*** ERROR grnn.temp - result is.na TRUE") }
+  }
+  return(sum.temp)
+}
+
+grnn.temp.1939 <- grnn.temp(1939, 1.3 ,2.3)
+plot(grnn.temp.1939)
+grnn.temp.1978 <- grnn.temp(1978, 1.5 ,2.0)
+plot(grnn.temp.1978)
+grnn.temp.1979 <- grnn.temp(1979, 1.2 ,2.2)
+plot(grnn.temp.1979)
+
+```
+#### Replacing missing values by year
++  Before and after. Before and after. Well and distributed so missed by year
+```{r insert_new_vectors}
+plot(df.cli.site.period$PRECIP)
+df.cli.site.period[df.cli.site.period$Year==1939, 8] <- grnn.prec.1939
+df.cli.site.period[df.cli.site.period$Year==1978, 8] <- grnn.prec.1978
+df.cli.site.period[df.cli.site.period$Year==1979, 8] <- grnn.prec.1979
+
+df.cli.site.period[df.cli.site.period$Year==1939, 6] <- grnn.temp.1939
+df.cli.site.period[df.cli.site.period$Year==1978, 6] <- grnn.temp.1978
+df.cli.site.period[df.cli.site.period$Year==1979, 6] <- grnn.temp.1979
+
+plot(df.cli.site.period$PRECIP)
+plotNA.distribution(df.cli.site.period$PRECIP)
+plotNA.distributionBar(df.cli.site.period$PRECIP)
+plotNA.gapsize(df.cli.site.period$PRECIP)
+print("df.cli.site.period$PRECIP")
+summary(df.cli.site.period$PRECIP)
+plot(df.cli.site.period$TMEAN)
+plotNA.distribution(df.cli.site.period$TMEAN)
+plotNA.distributionBar(df.cli.site.period$TMEAN)
+plotNA.gapsize(df.cli.site.period$TMEAN)
+print("df.cli.site.period$TMEAN")
+summary(df.cli.site.period$TMEAN)
+```
+
+```{r na_grnn}
+require(grnn); require(grt); require(foreach); require(imputeTS)
+
+setZeroNegativeNumber <- function(n){
+  if(n < 0) return(0)
+  else return(n)
+}
+as.zero.negative <- function(vec){
+  return(sapply(vec, setZeroNegativeNumber))
+}
+na.grnn <- function (x, s) {
+  if(!is.null(dim(x)) && dim(x)[2] != 1) {
+    stop("Input x is not univariate")
+  }
+  if (!is.numeric(x)) {
+    stop("Input x is not numeric") 
+  }
+  if (!is.numeric(s)) {
+    stop("Input s is not numeric") 
+  }
+  if (sum(is.na(x)) == 0) return(x)
+  ## PRE-PROCESSING DATA
+  vec.na <- x; vec.na.scale <- grt::scale(vec.na);  
+  vec.na.scale.min <- min(vec.na.scale, na.rm = TRUE); 
+  vec.na.scale.max <- max(vec.na.scale, na.rm = TRUE); 
+  vec.na.index <- which(is.na(vec.na)) 
+  vec.na.scale.na.omit <- na.omit(vec.na.scale);
+  days <- 1:length(vec.na); days.scale <- grt::scale(days) 
+  days.scale.na.omit <- days.scale[-vec.na.index]; # base::scale(days)
+  XY <- data.frame(days.scale.na.omit, vec.na.scale.na.omit) # vec.scale.na.omit
+  ##
+  L <- grnn::learn(XY, variable.column = ncol(XY))
+  grnn <- grnn::smooth(L, sigma = s)
+  for (i in vec.na.index) {
+    #todo поставить проверку выхода за min max
+    G <- grnn::guess(grnn, days.scale[i, 1])
+    if (is.na(G)) { G <- 0 }
+    vec.na.scale[i] <- G
+    #cat("Guess num= ", i, "\n")
+  }
+  vec.na.unscale <- grt::unscale(vec.na.scale)
+  return(as.vector(vec.na.unscale))
+} #end na.grnn
+
+min.mse.grnn <- function(x){
+  return(s)
+} #end min.mse.grnn
+```
+#### Application of neural network algorithm for all observations for this station 1
+
+```{r filled__prec}
+summary(df.cli.site.period[,c(6,8)])
+df.cli.site.prec <- df.cli.site.period$PRECIP
+
+plot(df.cli.site.prec , col="blue")
+cli.site.prec.na <- which(is.na(df.cli.site.prec)) # index in vector
+cli.site.prec.zoo <- as.zero.negative(na.grnn(df.cli.site.prec, 0.001))
+cli.site.prec.kalman <- as.zero.negative(
+  imputeTS::na.kalman(df.cli.site.prec))
+#cli.site.prec.kalman <- as.zero.negative(
+#  imputeTS::na.kalman(df.cli.site.prec, model = "auto.arima", smooth = TRUE))
+
+summary(cli.site.prec.zoo)
+summary(cli.site.prec.kalman)
+
+for(i in 1:length(cli.site.prec.na)){
+  points(cli.site.prec.na[i], cli.site.prec.zoo[cli.site.prec.na[i]], col="red", pch=19)
+}
+for(i in 1:length(cli.site.prec.na)){
+  points(cli.site.prec.na[i], cli.site.prec.kalman[cli.site.prec.na[i]], col="green", pch=19)
+}
+
+plotNA.distribution(df.cli.site.prec)
+```
+#### Application of neural network algorithm for all observations for this station
+
+```{r filled_temp}
+cli.site.temp <- df.cli.site.period$TMEAN
+
+plot(cli.site.temp, col="blue")
+cli.site.temp.na <- which(is.na(cli.site.temp))
+cli.site.temp.zoo <- na.grnn(cli.site.temp, 0.01) 
+cli.site.temp.kalman <- imputeTS::na.kalman(cli.site.temp)
+
+summary(cli.site.temp.zoo)
+summary(cli.site.temp.kalman)
+
+for(i in 1:length(cli.site.temp.na)){
+  points(cli.site.temp.na[i], cli.site.temp.zoo[cli.site.temp.na[i]], col="red", pch=19)
+}
+for(i in 1:length(cli.site.temp.na)){
+  points(cli.site.temp.na[i], cli.site.temp.kalman[cli.site.temp.na[i]], col="green", pch=19)
+}
+
+plotNA.distribution(cli.site.temp)
+```
+#### Write the results in Excel format
+```{r create_new_data_cli}
+require(openxlsx)
+
+df.vso <- data.frame(
+  df.cli.site.period[, c(1,2,3,4), ],
+  Temp = round(cli.site.temp.kalman, 2),
+  Prec = round(cli.site.prec.kalman, 2)
+)
+summary(df.vso)
+openxlsx::write.xlsx(
+  df.vso, 
+  file = paste0(file.cli.path, file.name.xlsx))
+#save(kara_turek, file = paste0(file.cli.path,"/kara_turek.Rdata"))
+
+```
+
+#### Record one year climate data in the format model Vaganova Shashkina
+```{r writeVSO}
+#Reading climatic data in one year. Format VSO
+get_one_year_vso <- function(years, now) {
+  one_year <- years[years$Year == now, ]
+  cli_dataset <- data.frame(
+    one_year[,4], one_year[,3], 
+    one_year[,2], as.integer(one_year$Prec*10), 
+    as.integer(one_year$Temp*10)
+  )
+  names(cli_dataset) <- c("day", "month", "year", "prec", "temp");
+  return(cli_dataset)
+}
+#Record one year climate data in the format model Vaganova Shashkina
+write.table.vso <- function(year.cli, filled_path, file_name){
+  write.table(year.cli, file = paste(filled_path,file_name, sep=""),
+              row.names=FALSE, col.names=FALSE, sep="\t")
+}
+#
+for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+  cat("Write .CLI file= ", paste0(i,".CLI"), "\n")
+  df.vso.i <- get_one_year_vso(df.vso, i)
+  summary(df.vso.i)
+  write.table.vso(df.vso.i, file.cli.path, paste0("/VSO/", i, ".CLI"))
+}
+# https://www.rdocumentation.org/packages/BBmisc/versions/1.10
+```
