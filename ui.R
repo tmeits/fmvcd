@@ -23,7 +23,7 @@ shinyUI(
       "VS-NNET",
       tabPanel("imputeCli",
       # theme = "cerulean",  # <--- To use a theme, uncomment this "shinythemes",
-      fluidPage( theme = shinytheme("darkly"), #flatly
+      fluidPage( theme = shinytheme("spacelab"), #flatly #darkly
       useShinyjs(),
       shinythemes::themeSelector(),  # <--- Add this somewhere in the UI
     sidebarLayout(
@@ -144,6 +144,13 @@ tabPanel("imputeCli::Plotly",
                          min = 0.01, 
                          max = 0.9, value = 0.16),
              tags$hr(),
+             div("TODO:", tags$br(), tags$br(), tags$ul( 
+                 tags$li(" Interactively change the color graphics "),
+                 tags$li(" Interactively change the color graphics ")
+             )),
+             tags$hr(),
+             downloadButton('downloadDataPlotly', 'Save Results to File', class = "butt"),
+             tags$hr(),
              tags$div(a("Created by Iljin Victor, 2017"))
            ), # sidebarPanel
          mainPanel(
@@ -152,8 +159,9 @@ tabPanel("imputeCli::Plotly",
              plotlyOutput("PlotlyPrec"), #, height = "600px", width = "640"
              tags$hr(),
              plotlyOutput("PlotlyTemp", height = "480px", width = "640")
-           )) # mainPanel
-         ) # sidebarLayout
+           )), # mainPanel
+         position = c("right"),
+         fluid = TRUE) # sidebarLayout
          ),
 ############################
 ###  VS-Shiny            ###

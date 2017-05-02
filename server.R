@@ -20,6 +20,11 @@ source("na_grnn.R")
 source("global-write.R")
 source("global-plot.R")
 
+read.year <- function(fileName) {
+  cli_dataset <-read.table(fileName, header=FALSE, sep="")
+  return(cli_dataset[1, 3])
+}
+
 createDF <- function(fileName){
   cli_dataset <-read.table(fileName, header=FALSE, sep="")
   names(cli_dataset) <- c("day", "month", "year", "prec", "temp");
@@ -32,6 +37,8 @@ createDF <- function(fileName){
 file_name <- '1977.cli'; krest1977 <- createDF(file_name)
 file_name <- '1967.cli'; krest1967 <- createDF(file_name)
 file_name <- '1969.cli'; krest1969 <- createDF(file_name)
+
+YEAR <- read.year(file_name)
 ##
 shinyServer(
   function(input, output, session) {
@@ -106,6 +113,15 @@ shinyServer(
     }
   })
   #
+  getFileYear <- reactive ({
+    inFile <- input$filecli
+    if (is.null(inFile)){
+      cat("Preloads year", YEAR, "\n")
+    }else{
+      cat("Uploads year\n"); cat(str(inFile), "\n")
+    }
+  })
+  #
   getFileCli <- reactive({
     inFile <- input$filecli
     if (is.null(inFile)){
@@ -125,7 +141,7 @@ shinyServer(
   })
   #
   output$summaryCli <- renderPrint({
-    cat(getFileCli(), "***\n")
+    cat(getFileCli(), getFileYear(), "***\n")
       str(currentFileInput())
       cat("***\n")
       summary(currentFileInput())
@@ -270,6 +286,10 @@ shinyServer(
       write.csv(datasetInput(), file)
     }
   ) 
+  
+  ##############################
+  ### DownloadsData
+  ##############################
 
   output$downloadData <- downloadHandler(
     filename = function() { 
@@ -283,6 +303,16 @@ shinyServer(
       #write.csv(na.grnn.cli(currentFileInput(), input$countTest, 0.01, FALSE, FALSE), file)
     }
   ) # currentFileInput(), na.na, paste0(getNameFileCli()
+  output$downloadDataPlotly <- downloadHandler(
+    filename = function() { 
+      paste0(getNameFileCli(), '.filledPlotly')
+    },
+    content = function(file) {
+      filled.cli <- na.grnn.cli(currentFileInput(), 108, 
+                           input$sigmaPrecPlotly, FALSE, FALSE)
+      write.table(filled.cli, file)
+    }  
+  ) # downloadDataPlotly <- downloadHandler(
 
   output$frameShinyJS <- renderUI({ # https://shiny.rstudio.com/articles/tag-glossary.html
     demoShinyJS <- tags$iframe(src="https://daattali.com/shiny/shinyjs-mini-demo/", height=600, width=900)
@@ -297,13 +327,13 @@ shinyServer(
     #plotlyMarkersLines()
     grnn.impute <- na.grnn.cli(currentFileInput(), 106, input$sigmaPrecPlotly, FALSE, FALSE)
     plotlyVect(currentFileInput()$prec, grnn.impute$prec,
-               paste0(getNameFileCli(), " Prec - GRNN-R"), "Prec (mm)", "Days")
+               paste0(getNameFileCli(), " Prec - GRNN-R"), "Precipitation in millimeters", "Days")
   }) # output$PlotlyPrec
   
   output$PlotlyTemp <- renderPlotly({
     #plotlyNAMarkersLines()
-    grnn.impute <- na.grnn.cli(currentFileInput(), 106, input$sigmaPrecPlotly, FALSE, FALSE)
-    plotlyVect(currentFileInput()$prec, grnn.impute$prec,
+    grnn.impute <- na.grnn.cli(currentFileInput(), 106, input$sigmaTempPlotly, FALSE, FALSE)
+    plotlyVect(currentFileInput()$temp, grnn.impute$temp,
                paste0(getNameFileCli(), " Temp - GRNN-R"), "Temperature in degrees Celsius", "Days")
   }) # output$PlotlyTemp
   
