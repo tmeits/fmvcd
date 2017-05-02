@@ -5,7 +5,20 @@ library(grnn)
 library(ggplot2)
 library(reshape2)
 library(imputeTS)
-# load iva_scripts
+require(grt)
+require(foreach)
+library(shinyjs)
+require(lubridate)
+library(plotly)
+
+# load IVA_scripts
+source("zoo_spline_cli3.R")
+source("imputets_kalman.R")
+#source("na_grnn_cli01.R")
+source("na_grnn_cli3.R")
+source("na_grnn.R")
+source("global-write.R")
+source("global-plot.R")
 
 createDF <- function(fileName){
   cli_dataset <-read.table(fileName, header=FALSE, sep="")
@@ -15,17 +28,64 @@ createDF <- function(fileName){
   days <- c(1:dim(cli_dataset)[1])
   return(data.frame(days=days, prec=prec_vector, temp=temp_vector))
 }
-## load global data
-file_name <- '2014.cli'; krest2014 <- createDF(file_name)
+## read global data.frame from disk
+file_name <- '1977.cli'; krest1977 <- createDF(file_name)
 file_name <- '1967.cli'; krest1967 <- createDF(file_name)
 file_name <- '1969.cli'; krest1969 <- createDF(file_name)
 ##
 shinyServer(
-function(input, output) {
+  function(input, output, session) {
+  # https://github.com/daattali/shinyjs/blob/master/inst/examples/basic/app.R
+  # http://deanattali.com/shinyjs/
+  
+  onclick("toggleAdvanced", toggle(id = "advanced", anim = TRUE))  
+    
+  observe({ # input$vscli,
+    #http://stackoverflow.com/questions/34733147/unable-to-disable-a-shiny-app-radio-button-using-shinyjs
+    if(input$vscli == TRUE) {
+      shinyjs::disable(selector = "[type=radio][value='VS-R Shiny format .cli']")
+      shinyjs::disable(selector = "[type=radio][value='VS-Fortran 5 Classic format .CLI']")
+      shinyjs::disable(selector = "[type=radio][value='VS-Fortran 5 China format .CLI']")
+      shinyjs::disable(selector = "[type=radio][value='aisori.meteo.ru/ClimateR']")
+    }
+    else {
+      shinyjs::enable(selector = "[type=radio][value='VS-R Shiny format .cli']")
+      shinyjs::enable(selector = "[type=radio][value='VS-Fortran 5 Classic format .CLI']")
+      shinyjs::enable(selector = "[type=radio][value='VS-Fortran 5 China format .CLI']")
+      shinyjs::enable(selector = "[type=radio][value='aisori.meteo.ru/ClimateR']")
+    }
+  })  
+    
+  observeEvent(input$button, {
+    toggle("countTest")
+  })
+ 
+  observeEvent(input$manualSigma, {
+    
+    
+    if(input$manualSigma == TRUE){
+      shinyjs::hide("countPrecTest")
+      shinyjs::hide("countTempTest")
+      shinyjs::show("sigmaPrecGRNN")
+      shinyjs::show("sigmaTempGRNN")
+    }else{
+      shinyjs::hide("sigmaPrecGRNN")
+      shinyjs::hide("sigmaTempGRNN")
+      shinyjs::show("countPrecTest")
+      shinyjs::show("countTempTest")
+    }
+  })
+  #
+  values <- reactiveValues()
+  values$sigmaShow <- FALSE
+  # 
+  methodNA <- reactive({
+    
+  })
   #
   datasetInput <- reactive({
     switch(input$dataset,
-           "krest2014" = krest2014,
+           "krest1977" = krest1977,
            "krest1967" = krest1967,
            "krest1969" = krest1969)
   })
@@ -55,16 +115,80 @@ function(input, output) {
     }
   })
   #
-  output$summaryCli <-renderPrint({
+  getNameFileCli <- reactive({
+    inFile <- input$filecli
+    if (is.null(inFile)){
+      input$dataset
+    }else{
+      inFile$name
+    }
+  })
+  #
+  output$summaryCli <- renderPrint({
     cat(getFileCli(), "***\n")
       str(currentFileInput())
       cat("***\n")
       summary(currentFileInput())
   })
-  
-  output$pwd2 <-renderPrint({
-    summary(datasetInput())
+  ################################
+  output$precNA <-renderPlot({
+    if(input$replaceNA == "GRNN"){
+      if(input$manualSigma == TRUE){
+        na.na.grnn <- na.grnn.cli(currentFileInput()
+                                  , input$countPrecTest, input$sigmaPrecGRNN, FALSE, FALSE)
+      }else{
+        na.na.grnn <- na.grnn.cli(currentFileInput()
+                                  , input$countPrecTest, 0.01, TRUE, FALSE)
+      }
+      #par(mfrow=c(2,1))
+      plotPrecFilled(currentFileInput(), na.na.grnn, 
+                     paste0(getNameFileCli(), " - GRNN"))
+      #
+      #na.na <- na.spline.cli(currentFileInput())
+      #plotTempFilled(currentFileInput(), na.na, getNameFileCli())
+    }else if(input$replaceNA == "Spline"){
+      na.na <- na.spline.cli(currentFileInput())
+      plotPrecFilled(currentFileInput(), na.na, paste0(getNameFileCli(), "Spline"))
+    }
   })
+  
+  output$precNAInfo <- renderPrint({
+    cat("***\n")
+    cat("Method inputation= ", input$replaceNA, "\n")
+    cat("***\n")
+    summary(na.spline.cli(currentFileInput()))
+    
+    })
+  #
+  output$tempNA <-renderPlot({
+    if(input$replaceNA == "GRNN"){
+      if(input$manualSigma == TRUE){
+        na.na.grnn <- na.grnn.cli(currentFileInput()
+                                  , input$countTempTest, input$sigmaTempGRNN, FALSE, FALSE)
+      }else{
+        na.na.grnn <- na.grnn.cli(currentFileInput()
+                                  , input$countTempTest, 0.01, TRUE, FALSE)
+      }
+      
+      #par(mfrow=c(2,1))
+      plotTempFilled(currentFileInput(), na.na.grnn, 
+                     paste0(getNameFileCli(), " - GRNN"))
+      #
+      #na.na <- na.spline.cli(currentFileInput())
+      #plotTempFilled(currentFileInput(), na.na, getNameFileCli())
+    }else if(input$replaceNA == "Spline"){
+      na.na <- na.spline.cli(currentFileInput())
+      plotTempFilled(currentFileInput(), na.na, paste0(getNameFileCli(), " - Spline"))
+    }
+  })
+  
+  output$tempNAInfo <- renderPrint({
+    cat("***\n")
+    cat("Method inputation= ", input$replaceNA, "\n")
+    cat("***\n")
+    summary(na.spline.cli(currentFileInput()))
+  })
+  #################################
   
   output$contentsPlot <- renderPlot({
     # ggvis: Similar to ggplot2, but the plots are focused on being web-based and are more interactive
@@ -95,7 +219,7 @@ function(input, output) {
     
     ## calculation of minimum maximum value of a vector
     ylimMinMAx <- c(min(tempVect, na.rm=TRUE), max(tempVect, na.rm=TRUE))
-    namePlot <- as.character(getFileCli()[1,1])
+    namePlot <- getNameFileCli()
     ## Plot first set of data and draw its axis
     plot(time, tempVect, pch=16, axes=FALSE, ylim=ylimMinMAx, xlab="", ylab="", 
          type="b",col="darkred", main=paste0("Climatic data ", namePlot)) # !!!!!
@@ -132,18 +256,57 @@ function(input, output) {
   output$contentsPlotPrec <- renderPlot({
     plot(datasetInput()[,1],datasetInput()[,2], col="red")
   })
-  #
+  # 
   output$tableCli <- renderDataTable({
     currentFileInput()
     #datasetInput()
   }, options = list(lengthMenu = c(16, 30, 50), pageLength = 16))
   
-  output$downloadData <- downloadHandler(
+  output$downloadData2 <- downloadHandler(
     filename = function() { 
       paste(input$dataset, '.csv', sep='') 
     },
     content = function(file) {
       write.csv(datasetInput(), file)
     }
-  )
-})
+  ) 
+
+  output$downloadData <- downloadHandler(
+    filename = function() { 
+      paste(getNameFileCli(), '.filled', sep='') 
+    },
+    content = function(file) {
+      # filled na.spline.cli(currentFileInput())
+      # na.grnn.cli(currentFileInput()
+      #, input$countTest, 0.01, TRUE, FALSE)
+      write.csv(na.spline.cli(currentFileInput()), file)
+      #write.csv(na.grnn.cli(currentFileInput(), input$countTest, 0.01, FALSE, FALSE), file)
+    }
+  ) # currentFileInput(), na.na, paste0(getNameFileCli()
+
+  output$frameShinyJS <- renderUI({ # https://shiny.rstudio.com/articles/tag-glossary.html
+    demoShinyJS <- tags$iframe(src="https://daattali.com/shiny/shinyjs-mini-demo/", height=600, width=900)
+    print(demoShinyJS)
+    demoShinyJS
+  })
+  
+  ###############################
+  ### Plotly
+  ###############################
+  output$PlotlyPrec <- renderPlotly({
+    #plotlyMarkersLines()
+    grnn.impute <- na.grnn.cli(currentFileInput(), 106, input$sigmaPrecPlotly, FALSE, FALSE)
+    plotlyVect(currentFileInput()$prec, grnn.impute$prec,
+               paste0(getNameFileCli(), " Prec - GRNN-R"), "Prec (mm)", "Days")
+  }) # output$PlotlyPrec
+  
+  output$PlotlyTemp <- renderPlotly({
+    #plotlyNAMarkersLines()
+    grnn.impute <- na.grnn.cli(currentFileInput(), 106, input$sigmaPrecPlotly, FALSE, FALSE)
+    plotlyVect(currentFileInput()$prec, grnn.impute$prec,
+               paste0(getNameFileCli(), " Temp - GRNN-R"), "Temperature in degrees Celsius", "Days")
+  }) # output$PlotlyTemp
+  
+  })
+#
+
