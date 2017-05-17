@@ -1,0 +1,92 @@
+---
+title: "gaps in data plot 36307 in Erzin"
+author: "Iljin Victor"
+date: '15 мая 2017 г'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r clear_all, echo=FALSE}
+rm(list=ls())
+```
+
+```{r set_work_dir, echo=FALSE}
+library(imputeTS)
+cli_path <- "C:/Users/IVA/Dropbox/Apps/vs-omtr/impute-cli"
+setwd(cli_path); getwd()
+```
+
+#### Чтение данных из датасета участка 36307 in Erzin
+  + Работаем с метеоданными <http://aisori.meteo.ru/ClimateR> в [R]
+  + Конвертируем данные метеостанции для работы в data.frame [R] 
+    + Удаляем качество замера
+    + Присваиваем столбцам наименования
+    + Выводим описательную статистику
+
+```{r read_cli_datasets, echo=FALSE}
+station.cli <- read.csv(paste0(cli_path, '/36307.txt'), header = FALSE, sep = ";", dec = ".") 
+station.cli <- station.cli[-c(5, 7, 9, 11, 13, 14)] # Удаляем лишние столбцы
+station.cli <- setNames(station.cli, c("Station", "Year", "Month", "Day",  'TMIN','TMEAN','TMAX','PRECIP'))
+str(station.cli)
+summary(station.cli[, 5:8])
+```
+
+## Выводим интерактивный график
+
+```{r temperature_dygraph, echo=FALSE}
+library(dygraphs)
+library(dplyr)
+data.frame(days = 1:length(station.cli[, 8]), prec = station.cli[, 8]) %>%
+#data.frame(days = station.cli[, 2], prec = station.cli[, 8]) %>%
+dygraphs::dygraph(main = "36307 in Erzin - Precipitation for the whole period") %>%
+  dyRangeSelector() %>%
+  dyOptions(connectSeparatedPoints = FALSE)
+#data.frame(days = 1:length(station.cli[, 8]), prec = station.cli[, 6], 
+#           impute_prec = na.kalman(station.cli[, 6])) %>%
+data.frame(days = 1:length(station.cli[, 8]), prec = station.cli[, 6]) %>%
+dygraphs::dygraph(main = "36307 in Erzin - Temperature for the entire period") %>%
+  dyRangeSelector() %>%
+  dyOptions(connectSeparatedPoints = FALSE)
+
+
+```
+
+#### Служебные функции
+  + Чтение климатических данных за один год
+```{r getyear, echo=FALSE}
+get_one_year <- function(years, now) {
+  # Чтение климатических данных за один год
+  return(years[years$Year == now, ])
+}
+Y64 <- get_one_year(station.cli, 1964)
+
+```
+
+#### функция преобразующая дату в количество дней с начала года
+```{r SUMT12C, echo=FALSE}
+# функция преобразующая дату в количество дней с начала года
+num_days <- function(year, month, day) {
+  D1 <- as.Date(paste(year, "-1-1", sep = ""))
+  asd <- as.Date(paste(year, "-", month, "-", day, sep = ""))
+  return(as.numeric(difftime(asd, D1, units = "day")))
+}
+num_days(1964, 6, 22)
+```
+#### Преобразование вектора Год-Месяц-День в строку пригодную для обратного преобразования
+```{r date2string, echo=FALSE}
+date2string <- function(cDate) {
+  sD <- paste(cDate[1], "-", cDate[2], "-", cDate[3], sep = "") #; print(sD)
+  D  <- as.Date(sD) # при неправильной дате выбросится исключение
+  return(sD)
+}
+date2string(c(2007,11,11))
+
+```
+
+#### Записываем результаты расчетов в таблицу Excel
+  
+```{r writetable2xlsx, echo=FALSE}
+```
