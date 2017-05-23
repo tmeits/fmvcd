@@ -2,11 +2,12 @@
 title: "gaps in data plot 36307 in Erzin"
 author: "Iljin Victor"
 date: '15 мая 2017 г'
-output: html_document
+output: html_notebook
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+##output: html_document
 ```
 
 ```{r clear_all, echo=FALSE}
@@ -14,9 +15,43 @@ rm(list=ls())
 ```
 
 ```{r set_work_dir, echo=FALSE}
+#install.packages('formatR', dependencies=TRUE, repos='http://cran.rstudio.com/')
 library(imputeTS)
 cli_path <- "C:/Users/IVA/Dropbox/Apps/vs-omtr/impute-cli"
+#cli_path <- "C:/Users/lora/Dropbox/Apps/vs-omtr/impute-cli"
 setwd(cli_path); getwd()
+```
+
+```{r utils, echo=FALSE}
+is.leapyear=function(year){
+  return(((year %% 4 == 0) & (year %% 100 != 0)) | (year %% 400 == 0))
+}
+setZeroNegativeNumber <- function(n){
+  if(n < 0) return(0)
+  else return(n)
+}
+as.zero.negative <- function(vec){
+  return(sapply(vec, setZeroNegativeNumber))
+}
+ymd2date <- function(cDate) {
+  sD <- paste(cDate[1], "-", cDate[2], "-", cDate[3], sep = "") #; print(sD)
+  return(as.Date(sD)) # при неправильной дате выбросится исключение
+ 
+}
+select.year <- function(years, num){
+  year <- years[years$year == num, ]
+  return(year)
+}
+select.year.prec <- function(years, num){
+  year <- select.year(years, num)
+  year.prec <- year$prec
+  return(year.prec)
+}
+select.year.temp <- function(years, num){
+  year <- select.year(years, num)
+  year.temp <- year$temp
+  return(year.temp)
+}
 ```
 
 #### Чтение данных из датасета участка 36307 in Erzin
@@ -27,32 +62,198 @@ setwd(cli_path); getwd()
     + Выводим описательную статистику
 
 ```{r read_cli_datasets, echo=FALSE}
-station.cli <- read.csv(paste0(cli_path, '/36307.txt'), header = FALSE, sep = ";", dec = ".") 
-station.cli <- station.cli[-c(5, 7, 9, 11, 13, 14)] # Удаляем лишние столбцы
-station.cli <- setNames(station.cli, c("Station", "Year", "Month", "Day",  'TMIN','TMEAN','TMAX','PRECIP'))
+station.cli <- read.csv(paste0(cli_path, '/36307.txt'), header = FALSE, sep = ";", dec = ".")
+station.cli <- station.cli[-c(5, 6, 7, 9, 10, 11, 13, 14)] # Удаляем лишние столбцы
+station.cli <- setNames(station.cli, c("station", "year", "month", "day", 'temp','prec'))
 str(station.cli)
-summary(station.cli[, 5:8])
+summary(station.cli$temp)
+summary(station.cli$prec)
 ```
+### Выводим plotNADistribution and plotNA.gapsize
+```{r plotNA, echo=FALSE}
+#https://rdrr.io/cran/imputeTS/man/plotNA.distribution.html
+#https://rdrr.io/cran/imputeTS/man/plotNA.imputations.html
 
+xdays <- ymd2date(station.cli[1,2:4]) + seq(0, (length(station.cli$station) - 1), by = 1)
+
+plotNA.distribution(station.cli$prec, colPoints = "steelblue", colBackgroundMV = "indianred2", 
+                    main = "Distribution of NAs - 36307 in Erzin", xlab = "Time", ylab = "prec",                     pch = 20, cexPoints = 0.8, col = "black")
+plotNA.distribution(station.cli$temp, colPoints = "steelblue", colBackgroundMV = "indianred2", 
+                    main = "Distribution of NAs - 36307 in Erzin", xlab = "Time", ylab = "temp",                     pch = 20, cexPoints = 0.8, col = "black")
+plotNA.gapsize(station.cli$prec, ylab = "prec")
+plotNA.gapsize(station.cli$temp,  ylab = "temp")
+
+```
+#### Quick classification of missing data
+
+There are two types of missing data:
+
+  + MCAR: missing completely at random. This is the desirable scenario in case of missing data.
+
+  + MNAR: missing not at random. Missing not at random data is a more serious issue and in this case it might be wise to check the data gathering process further and try to understand why the information is missing. For instance, if most of the people in a surv
+  
+Assuming data is MCAR, too much missing data can be a problem too. Usually a safe maximum threshold is 5% of the total for large datasets. If missing data for a certain feature or sample is more than 5% then you probably should leave that feature or sample out. We therefore check for features (columns) and samples (rows) where more than 5% of the data is missing using a simple function
+```{r pMiss}
+library(dplyr); library(dygraphs)
+pMiss <- function(x){
+  sum(is.na(x))/length(x)*100
+}
+cat("Percentage of missing data (temp): ", pMiss(station.cli$temp),"\n")
+cat("Percentage of missing data (prec): ", pMiss(station.cli$prec),"\n")
+
+for (i in c(min(station.cli$year): max(station.cli$year))) {
+  cat("Year=", i, pMiss(select.year.prec(station.cli, i)), 
+      pMiss(select.year.temp(station.cli, i)), "\n")
+}
+
+year<- c(min(station.cli$year): max(station.cli$year))
+perc_temp <- vector(); perc_prec <- vector(); j <- 1
+for (i in 1:length(year)) {
+  perc_prec[i] <- pMiss(select.year.prec(station.cli, year[i]))
+  perc_temp[i] <- pMiss(select.year.temp(station.cli, year[i]))
+}
+data.frame(year, perc_temp, perc_prec) %>%
+  dygraphs::dygraph(main = "36307 in Erzin - Percentage of missing data") %>%
+  dyRangeSelector() %>%
+  dyOptions(connectSeparatedPoints = FALSE) 
+```
+#### Using mice for looking at missing data pattern
+```{r data_pattern}
+#https://datascienceplus.com/imputing-missing-data-with-r-mice-package/
+library(mice); library(VIM); #library(VIMGUI)
+#vmGUImenu()
+#Табличное изучение пропущенных данных
+md.pattern(station.cli)
+marginplot(station.cli[c(5,6)])
+RZ<-mice(station.cli[c(5,6)], m=5, maxit=50, meth='pmm', seed=500)
+summary(RZ)
+compRZ1<-complete(RZ,1)
+compRZ2<-complete(RZ,2)
+compRZ3<-complete(RZ,3)
+compRZ4<-complete(RZ,4)
+compRZ5<-complete(RZ,5)
+#Inspecting the distribution of original and imputed data
+data.frame(days = 1:length(station.cli$prec),
+  compRZ1$temp, compRZ2$temp, compRZ3$temp, compRZ4$temp, compRZ5$temp) %>%
+  dygraphs::dygraph(main = "36307 in Erzin - Temperature - mice") %>%
+  dyOptions(connectSeparatedPoints = FALSE) %>%
+  dyRangeSelector()
+library(lattice)
+densityplot(RZ)
+```
+```{r }
+```
 ## Выводим интерактивный график
 
 ```{r temperature_dygraph, echo=FALSE}
+#https://rstudio.github.io/dygraphs/shiny.html#shiny-date-input
+#https://rstudio.github.io/dygraphs/gallery-annotations.html
 library(dygraphs)
+library(xts)
 library(dplyr)
-data.frame(days = 1:length(station.cli[, 8]), prec = station.cli[, 8]) %>%
-#data.frame(days = station.cli[, 2], prec = station.cli[, 8]) %>%
+data.frame(days = 1:length(station.cli$prec), prec = station.cli$prec) %>%
 dygraphs::dygraph(main = "36307 in Erzin - Precipitation for the whole period") %>%
+  dyAxis("x", drawGrid = FALSE) %>%
   dyRangeSelector() %>%
-  dyOptions(connectSeparatedPoints = FALSE)
+  dyOptions(connectSeparatedPoints = FALSE) 
+  #%>%
+  #dyUnzoom() %>%
+  #dyCrosshair(direction = "vertical") #%>%
+
 #data.frame(days = 1:length(station.cli[, 8]), prec = station.cli[, 6], 
 #           impute_prec = na.kalman(station.cli[, 6])) %>%
-data.frame(days = 1:length(station.cli[, 8]), prec = station.cli[, 6]) %>%
+data.frame(days = 1:length(station.cli$prec), temp = station.cli$temp) %>%
 dygraphs::dygraph(main = "36307 in Erzin - Temperature for the entire period") %>%
   dyRangeSelector() %>%
-  dyOptions(connectSeparatedPoints = FALSE)
+  #dySeries(c("lwr", "fit", "upr"), label = "temp") %>%
+  dyOptions(connectSeparatedPoints = FALSE) %>%
+  dySeries("temp", drawPoints = FALSE, color = "red") #%>%
+  #dyLegend(show = "follow")
+  #dyOptions(colors = RColorBrewer::brewer.pal(3, "Set1"))
+
+```
+####
+```{r missRandomForest, echo=FALSE}
+library(missForest)
+library(mi)
+library(Hmisc)
+
+# ## Artificially produce missing values using the 'prodNA' function:
+set.seed(81)
+
+#st.cli<-station.cli$temp[16400:17000]
+st.cli<-station.cli$temp[5400:5800]
+plot(st.cli, t="l")
+# invalid mtry
+#st.imp <- missForest(xmis = t(st.cli), verbose = FALSE, mtry = 1501, ntree = 1501)
+#st.imp <- mi(t(st.cli))
+st.imp <- Hmisc::impute(station.cli$temp)
+
+#impute
+data.frame(
+  days = 1:length(station.cli$prec),
+  temp = station.cli$tem,
+  #temp.imp = missForest(station.cli$temp, verbose = FALSE)
+  temp.imp = na.kalman(station.cli$temp),
+  temp.imp2 = as.vector(Hmisc::impute(station.cli$temp))
+  #temp.imp = mi(station.cli$temp, seed = 335)
+  ) %>%
+  
+dygraphs::dygraph(main = "36307 in Erzin - Temperature - missRandomForest") %>%
+  dySeries("temp.imp", drawPoints = FALSE, color = "blue") %>%
+  dySeries("temp.imp2", drawPoints = FALSE, color = "green") %>%
+  dySeries("temp", drawPoints = FALSE, color = "red") %>%
+  dyOptions(connectSeparatedPoints = FALSE) %>%
+  dyRangeSelector()
+
+
+#https://github.com/harrelfe/Hmisc
+#https://habrahabr.ru/company/infopulse/blog/2
+#https://raw.githubusercontent.com/varmara/proteomics-course/gh-pages/02_data_preprocessing.R
+#https://github.com/varmara/proteomics-course/
+#
+#
+#
+#
+```
+```{r years, echo=FALSE}
+dygraph(ts(station.cli$prec, start = min(station.cli$year), end =  max(station.cli$year), frequency = 12)) %>%
+dyOptions(connectSeparatedPoints = FALSE)
+```
+
+
+```{r plotly, echo=FALSE}
+library(plotly)
+
+xdays <- ymd2date(station.cli[1,2:4]) + seq(0, (length(station.cli$station) - 1), by = 1)
+plot_ly(data.frame(times=xdays, prec=station.cli$prec), x = ~times, y = ~prec, name = 'prec', type = 'scatter', mode = 'lines') %>%
+  rangeslider()
+
+plot_ly(data.frame(times=xdays, temp=station.cli$temp), x = ~times, y = ~temp, name = 'prec', type = 'scatter', mode = 'lines') %>%
+  rangeslider()
 
 
 ```
+
+
+```{r impute, echo=FALSE}
+library(imputeTS)
+impute.cli <- data.frame(times=xdays, 
+                         temp=station.cli$temp, 
+                         prec=station.cli$prec,
+                         imp_temp=na.kalman(station.cli$temp), 
+                         imp_prec=as.zero.negative(na.kalman(station.cli$prec)))
+
+plot_ly(impute.cli, x = ~times, y = ~imp_prec, name = 'imp_prec', type = 'scatter', mode = 'lines')   %>%
+ add_trace(y = ~prec, name = 'prec', type = 'scatter', mode = 'lines')
+  #rangeslider()
+
+plot_ly(impute.cli, x = ~times, y = ~imp_temp, name = 'imp_temp', type = 'scatter', mode = 'lines')   %>%
+ add_trace(y = ~temp, name = 'temp', type = 'scatter', mode = 'lines') 
+  #rangeslider()
+
+```
+
 
 #### Служебные функции
   + Чтение климатических данных за один год
@@ -62,11 +263,10 @@ get_one_year <- function(years, now) {
   return(years[years$Year == now, ])
 }
 Y64 <- get_one_year(station.cli, 1964)
-
 ```
 
 #### функция преобразующая дату в количество дней с начала года
-```{r SUMT12C, echo=FALSE}
+```{r num_days, echo=FALSE}
 # функция преобразующая дату в количество дней с начала года
 num_days <- function(year, month, day) {
   D1 <- as.Date(paste(year, "-1-1", sep = ""))
@@ -85,8 +285,10 @@ date2string <- function(cDate) {
 date2string(c(2007,11,11))
 
 ```
+```{r convertTS}
 
-#### Записываем результаты расчетов в таблицу Excel
+```
+#### Записываем результаты в формате VS-O
   
-```{r writetable2xlsx, echo=FALSE}
+```{r write_vso, echo=FALSE}
 ```
