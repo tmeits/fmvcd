@@ -1,0 +1,157 @@
+---
+title: "R Shiny imputeNotebook"
+output: html_notebook
+---
+
+
+```{r App}
+## Only run examples in interactive R sessions
+library(shiny)
+library(shinythemes)
+library(shinyjs)
+library(imputeTS)
+library(grnn)
+library(grt)
+library(zoo)
+
+if (interactive()) {
+  
+  ui <- fluidPage(
+    titlePanel("upload multiple files ->  impute NA's-> downloads multiple files"),
+    sidebarLayout(
+      sidebarPanel(
+        tabsetPanel(
+          tabPanel("1",
+        fileInput("file1", "Choose CSV File", multiple = TRUE,
+                  accept = c(
+                    "text/csv",
+                    "text/comma-separated-values,text/plain",
+                    ".csv", ".cli", ".CLI")
+                  ),
+        tags$hr(),
+        # list formats
+        radioButtons("cliFormat", "Format upload .cli files:",
+               c("VS-Pascal" = "vso",
+                 "VS-Fortran" = "vsf",
+                 "meteo.ru/Aisori" = "aisori")
+               ),
+        tags$hr(),
+        checkboxInput("debug", "View Debug Info", TRUE),
+        checkboxInput("plotna", "Plot NA Distribution", FALSE),
+        checkboxInput("table", "View Table", FALSE),
+        tags$hr(),
+        radioButtons("cliFormatWrite", "Format download .cli files:",
+               c("VS-Pascal" = "vso",
+                 "VS-Fortran" = "vsf",
+                 "VS-Shiny" = "shiny")
+               )
+      ),
+      tabPanel("2")
+      )
+      ),
+      mainPanel(
+        tabsetPanel(
+          tabPanel("1",
+                   conditionalPanel(
+                    condition = "input.debug == true",
+                      verbatimTextOutput("strFileInput"),
+                      #verbatimTextOutput("summaryFileInput"),
+                      verbatimTextOutput("summaryMergeFileInput")),
+                    conditionalPanel(
+                      condition = "input.plotna == true",
+                        plotOutput("plotNADPrec"),
+                        plotOutput("plotNADTemp"),
+                        plotOutput("plotNAGPrec"), 
+                        plotOutput("plotNAGTemp")
+                                  ),
+                    conditionalPanel(
+                      condition = "input.table == true",
+                        dataTableOutput("contents"))
+                   ),
+          tabPanel("2",
+                   tabsetPanel(
+                     tabPanel("1"),
+                     tabPanel("2"),
+                     tabPanel("3"),
+                     tabPanel("4"),
+                     tabPanel("5")
+                   )
+                   ),
+          tabPanel("3"
+                   ),
+          tabPanel("4")
+        )
+      )
+    )
+  )
+  
+  server <- function(input, output, session) {
+    
+    data <- reactive({
+      if (is.null(input$file1)) {
+        return(NULL)
+      }
+      else {
+        if (input$cliFormat == "vso") {
+          cli_merge <- data.frame()
+          for (i in 1:nrow(input$file1)) {
+            cli <- read.csv(input$file1[[i, 'datapath']],  header=FALSE, sep="")
+            names(cli) <- c("day", "month", "year", "prec", "temp")
+            cli[cli$prec == -9999, 4] <- NA 
+            cli[cli$temp == -9999, 5] <- NA 
+            cli_merge <- rbind(cli_merge, cli)
+          }
+          cli_merge
+        }
+        else NULL
+      }
+    })
+    
+    output$strFileInput <- renderPrint({
+      str(input$file1)
+    })
+    output$summaryFileInput <- renderPrint({
+      cat("You chose format: ", input$cliFormat, "\n")
+      cat("nrow=", nrow(input$file1))
+      #summary(input$file1)
+    })
+    output$summaryMergeFileInput <- renderPrint({
+      if (!is.null(data())) {
+        cat("------------------------- day --------------------------\n")
+        print(summary(data()$day))
+        cat("------------------------- month ------------------------\n")
+        print(summary(data()$month))
+        cat("------------------------- year -------------------------\n")
+        print(summary(data()$year))
+        cat("------------------------- prec -------------------------\n")
+        print(summary(data()$prec))
+        cat("------------------------- temp -------------------------\n")
+        print(summary(data()$temp))
+      }
+      
+    })
+    output$contents <- renderDataTable({
+      data()
+    })
+    output$plotNADPrec <- renderPlot({
+      plotNA.distribution(data()$prec, colPoints = "steelblue", colBackgroundMV = "indianred2", main = "Distribution of NAs", xlab = "Time", ylab = "prec", pch = 20, cexPoints = 0.8, col = "black")
+    })
+    output$plotNADTemp <- renderPlot({
+      plotNA.distribution(data()$temp, colPoints = "steelblue", colBackgroundMV = "indianred2", main = "Distribution of NAs", xlab = "Time", ylab = "temp", pch = 20, cexPoints = 0.8, col = "black")
+    })
+    output$plotNAGPrec <- renderPlot({
+      plotNA.gapsize(data()$prec, ylab = "prec")
+    })
+    output$plotNAGTemp <- renderPlot({
+      plotNA.gapsize(data()$temp, ylab = "temp")
+    })
+  }
+  
+  shinyApp(ui, server)
+}
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
