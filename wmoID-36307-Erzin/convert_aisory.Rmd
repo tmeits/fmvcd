@@ -1,8 +1,10 @@
 ---
 title: "gaps in data plot 36307 in Erzin"
 author: "Iljin Victor"
-date: '15 мая 2017 г'
-output: html_notebook
+date: "15.5.17"
+output:
+  html_document: default
+  html_notebook: default
 ---
 
 ```{r setup, include=FALSE}
@@ -19,10 +21,11 @@ rm(list=ls())
 library(imputeTS)
 cli_path <- "C:/Users/IVA/Dropbox/Apps/vs-omtr/impute-cli"
 #cli_path <- "C:/Users/lora/Dropbox/Apps/vs-omtr/impute-cli"
+#cli_path <- "C:/Users/lora/Dropbox/Apps/vs-omtr/impute-cli"
 setwd(cli_path); getwd()
 ```
-
-```{r utils, echo=FALSE}
+## Утилиты
+```{r utils}
 is.leapyear=function(year){
   return(((year %% 4 == 0) & (year %% 100 != 0)) | (year %% 400 == 0))
 }
@@ -54,7 +57,7 @@ select.year.temp <- function(years, num){
 }
 ```
 
-#### Чтение данных из датасета участка 36307 in Erzin
+## Чтение данных из датасета участка 36307 in Erzin
   + Работаем с метеоданными <http://aisori.meteo.ru/ClimateR> в [R]
   + Конвертируем данные метеостанции для работы в data.frame [R] 
     + Удаляем качество замера
@@ -69,7 +72,7 @@ str(station.cli)
 summary(station.cli$temp)
 summary(station.cli$prec)
 ```
-### Выводим plotNADistribution and plotNA.gapsize
+## Выводим plotNADistribution and plotNA.gapsize
 ```{r plotNA, echo=FALSE}
 #https://rdrr.io/cran/imputeTS/man/plotNA.distribution.html
 #https://rdrr.io/cran/imputeTS/man/plotNA.imputations.html
@@ -84,7 +87,8 @@ plotNA.gapsize(station.cli$prec, ylab = "prec")
 plotNA.gapsize(station.cli$temp,  ylab = "temp")
 
 ```
-#### Quick classification of missing data
+
+## Quick classification of missing data
 
 There are two types of missing data:
 
@@ -93,7 +97,8 @@ There are two types of missing data:
   + MNAR: missing not at random. Missing not at random data is a more serious issue and in this case it might be wise to check the data gathering process further and try to understand why the information is missing. For instance, if most of the people in a surv
   
 Assuming data is MCAR, too much missing data can be a problem too. Usually a safe maximum threshold is 5% of the total for large datasets. If missing data for a certain feature or sample is more than 5% then you probably should leave that feature or sample out. We therefore check for features (columns) and samples (rows) where more than 5% of the data is missing using a simple function
-```{r pMiss}
+
+```{r pMiss2}
 library(dplyr); library(dygraphs)
 pMiss <- function(x){
   sum(is.na(x))/length(x)*100
@@ -115,9 +120,10 @@ for (i in 1:length(year)) {
 data.frame(year, perc_temp, perc_prec) %>%
   dygraphs::dygraph(main = "36307 in Erzin - Percentage of missing data") %>%
   dyRangeSelector() %>%
-  dyOptions(connectSeparatedPoints = FALSE) 
+  dyOptions(connectSeparatedPoints = FALSE)
 ```
-#### Using mice for looking at missing data pattern
+
+## Using mice for looking at missing data pattern (mice)
 ```{r data_pattern}
 #https://datascienceplus.com/imputing-missing-data-with-r-mice-package/
 library(mice); library(VIM); #library(VIMGUI)
@@ -125,24 +131,49 @@ library(mice); library(VIM); #library(VIMGUI)
 #Табличное изучение пропущенных данных
 md.pattern(station.cli)
 marginplot(station.cli[c(5,6)])
-RZ<-mice(station.cli[c(5,6)], m=5, maxit=50, meth='pmm', seed=500)
+RZ<-mice(station.cli[c(5,6)], m=5, maxit=5, meth='pmm', seed=500)
 summary(RZ)
-compRZ1<-complete(RZ,1)
-compRZ2<-complete(RZ,2)
-compRZ3<-complete(RZ,3)
-compRZ4<-complete(RZ,4)
-compRZ5<-complete(RZ,5)
+compRZ1 <- mice::complete(RZ,1)
+compRZ2 <- mice::complete(RZ,2)
+compRZ3 <- mice::complete(RZ,3)
+compRZ4 <- mice::complete(RZ,4)
+compRZ5 <- mice::complete(RZ,5)
 #Inspecting the distribution of original and imputed data
 data.frame(days = 1:length(station.cli$prec),
   compRZ1$temp, compRZ2$temp, compRZ3$temp, compRZ4$temp, compRZ5$temp) %>%
   dygraphs::dygraph(main = "36307 in Erzin - Temperature - mice") %>%
   dyOptions(connectSeparatedPoints = FALSE) %>%
-  dyRangeSelector()
+  dyRangeSelector(height = 20, strokeColor = "")
 library(lattice)
 densityplot(RZ)
 ```
+## Вывод дат по оси х-времени
+
+https://stackoverflow.com/questions/16442396/convert-daily-to-weekly-monthly-data-with-r
 ```{r }
+library(zoo)
+library(dygraphs)
+
+days <<- length(station.cli$prec)
+  
+tt <- seq(as.Date(paste0(min(station.cli$year),'-01-01')), by='day', length=days-1)
+#vals <- data.frame(A=runif(days), B=rnorm(days))
+vals <- data.frame(station.cli$prec)
+z <- zoo(vals, tt)
+z %>%
+dygraphs::dygraph(main = "36307 in Erzin - prec") %>%
+dyRangeSelector() %>%
+dyOptions(connectSeparatedPoints = FALSE)
+
+vals <- data.frame(station.cli$temp)
+z <- zoo(vals, tt)
+z %>%
+dygraphs::dygraph(main = "36307 in Erzin - temp") %>%
+dyRangeSelector() %>%
+dyOptions(connectSeparatedPoints = FALSE)
+
 ```
+
 ## Выводим интерактивный график
 
 ```{r temperature_dygraph, echo=FALSE}
@@ -172,7 +203,9 @@ dygraphs::dygraph(main = "36307 in Erzin - Temperature for the entire period") %
   #dyOptions(colors = RColorBrewer::brewer.pal(3, "Set1"))
 
 ```
-####
+
+## GRNN and Hmisc impute
+
 ```{r missRandomForest, echo=FALSE}
 library(missForest)
 library(mi)
@@ -192,7 +225,7 @@ st.imp <- Hmisc::impute(station.cli$temp)
 #impute
 data.frame(
   days = 1:length(station.cli$prec),
-  temp = station.cli$tem,
+  temp = station.cli$temp,
   #temp.imp = missForest(station.cli$temp, verbose = FALSE)
   temp.imp = na.kalman(station.cli$temp),
   temp.imp2 = as.vector(Hmisc::impute(station.cli$temp))
@@ -206,14 +239,27 @@ dygraphs::dygraph(main = "36307 in Erzin - Temperature - missRandomForest") %>%
   dyOptions(connectSeparatedPoints = FALSE) %>%
   dyRangeSelector()
 
+#impute
+data.frame(
+  days = 1:length(station.cli$prec),
+  prec = station.cli$prec,
+  #temp.imp = missForest(station.cli$temp, verbose = FALSE)
+  prec.imp = na.kalman(station.cli$prec),
+  prec.imp2 = as.vector(Hmisc::impute(station.cli$prec))
+  #temp.imp = mi(station.cli$temp, seed = 335)
+  ) %>%
+  
+dygraphs::dygraph(main = "36307 in Erzin - Temperature - missRandomForest") %>%
+  dySeries("prec.imp", drawPoints = FALSE, color = "blue") %>%
+  dySeries("prec.imp2", drawPoints = FALSE, color = "green") %>%
+  dySeries("prec", drawPoints = FALSE, color = "red") %>%
+  dyOptions(connectSeparatedPoints = FALSE) %>%
+  dyRangeSelector()
 
 #https://github.com/harrelfe/Hmisc
 #https://habrahabr.ru/company/infopulse/blog/2
 #https://raw.githubusercontent.com/varmara/proteomics-course/gh-pages/02_data_preprocessing.R
 #https://github.com/varmara/proteomics-course/
-#
-#
-#
 #
 ```
 ```{r years, echo=FALSE}
@@ -221,6 +267,7 @@ dygraph(ts(station.cli$prec, start = min(station.cli$year), end =  max(station.c
 dyOptions(connectSeparatedPoints = FALSE)
 ```
 
+## PlotLy
 
 ```{r plotly, echo=FALSE}
 library(plotly)
@@ -235,6 +282,7 @@ plot_ly(data.frame(times=xdays, temp=station.cli$temp), x = ~times, y = ~temp, n
 
 ```
 
+## PlotLy Impute
 
 ```{r impute, echo=FALSE}
 library(imputeTS)
@@ -254,10 +302,10 @@ plot_ly(impute.cli, x = ~times, y = ~imp_temp, name = 'imp_temp', type = 'scatte
 
 ```
 
-
-#### Служебные функции
+## Служебные функции
   + Чтение климатических данных за один год
-```{r getyear, echo=FALSE}
+  
+```{r getyear}
 get_one_year <- function(years, now) {
   # Чтение климатических данных за один год
   return(years[years$Year == now, ])
@@ -265,8 +313,9 @@ get_one_year <- function(years, now) {
 Y64 <- get_one_year(station.cli, 1964)
 ```
 
-#### функция преобразующая дату в количество дней с начала года
-```{r num_days, echo=FALSE}
+## функция преобразующая дату в количество дней с начала года
+
+```{r num_days}
 # функция преобразующая дату в количество дней с начала года
 num_days <- function(year, month, day) {
   D1 <- as.Date(paste(year, "-1-1", sep = ""))
@@ -275,7 +324,9 @@ num_days <- function(year, month, day) {
 }
 num_days(1964, 6, 22)
 ```
-#### Преобразование вектора Год-Месяц-День в строку пригодную для обратного преобразования
+
+## Преобразование вектора Год-Месяц-День в строку пригодную для обратного преобразования
+
 ```{r date2string, echo=FALSE}
 date2string <- function(cDate) {
   sD <- paste(cDate[1], "-", cDate[2], "-", cDate[3], sep = "") #; print(sD)
@@ -285,10 +336,89 @@ date2string <- function(cDate) {
 date2string(c(2007,11,11))
 
 ```
-```{r convertTS}
+
+## 
+
+```{r upload_multi}
+## Only run examples in interactive R sessions
+library(shiny)
+library(imputeTS)
+library(grnn)
+library(grt)
+
+if (interactive()) {
+  
+  ui <- fluidPage(
+    titlePanel("upload multiple files ->  impute NA's-> downloads multiple files"),
+    sidebarLayout(
+      sidebarPanel(
+        fileInput("file1", "Choose CSV File", multiple = TRUE,
+                  accept = c(
+                    "text/csv",
+                    "text/comma-separated-values,text/plain",
+                    ".csv", ".cli", ".CLI")
+        ),
+        tags$hr(),
+        checkboxInput("debug", "Debug", TRUE),
+        checkboxInput("plotna", "plotNA", TRUE),
+        checkboxInput("table", "Table", FALSE)
+      ),
+      mainPanel(
+        conditionalPanel(
+          condition = "input.debug == true",
+        verbatimTextOutput("strFileInput"),
+        verbatimTextOutput("summaryFileInput"),
+        verbatimTextOutput("summaryMergeFileInput")),
+        conditionalPanel(
+          condition = "input.plotna == true",
+           plotOutput("plotNAD")
+        ),
+        tableOutput("contents")
+      )
+    )
+  )
+  
+  server <- function(input, output, session) {
+    
+    data <- reactive({
+      if (is.null(input$file1)) {
+        return(NULL)
+      }
+      else {
+        #read.csv(input$file1[[1], 'datapath']], header = input$header)
+        cli <- read.csv(input$file1[[1, 'datapath']],  header=FALSE, sep="")
+        names(cli) <- c("day", "month", "year", "prec", "temp")
+        cli[cli$prec == -9999, 4] <- NA 
+        cli[cli$temp == -9999, 5] <- NA 
+        cli
+      }
+    })
+    
+    output$strFileInput <- renderPrint({
+      str(input$file1)
+    })
+    output$summaryFileInput <- renderPrint({
+      summary(input$file1)
+      #summary(input$file1[[1]])
+    })
+    output$summaryMergeFileInput <- renderPrint({
+      summary(data())
+    })
+    output$contents <- renderTable({
+      
+      #head(data())
+      #tail(data())
+      data()
+      
+    })
+  }
+  
+  shinyApp(ui, server)
+}
 
 ```
 #### Записываем результаты в формате VS-O
   
 ```{r write_vso, echo=FALSE}
+#
 ```
