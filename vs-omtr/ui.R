@@ -10,6 +10,8 @@
 library(shiny)
 library(shinythemes)
 library(shinyjs)
+library(dygraphs)
+library(plotly)
 
 # Define UI for application that draws a histogram
 shinyUI(
@@ -100,16 +102,29 @@ shinyUI(
                    tabPanel("Distribution of NAs Bar",
                             plotOutput("plotNABPrec"),
                             plotOutput("plotNABTemp")),
-                   tabPanel("4"
-                            ),
-                   tabPanel("5")
+                   tabPanel("Percentage of missing data",
+                            dygraphOutput("dygraphPercentageNAs"))
                  )       
         ),
-        tabPanel("ImputeNAs Temp" # plotNA.imputations
-                 
+        tabPanel("ImputeNAs Temp", # plotNA.imputations
+                 tabsetPanel(
+                   tabPanel("DyGraphs",
+                            dygraphOutput("dygraphTempNAs")
+                            ),
+                   tabPanel("PlotLy",
+                            plotlyOutput("plotlyTempNAs")
+                   ),
+                   tabPanel("highcharter"),
+                   tabPanel("RPlot",
+                            plotOutput('tempNA'), tags$hr())
+                 )         
         ),
-        tabPanel("ImputeNAs Prec"
-                 
+        tabPanel("ImputeNAs Prec", 
+                 tabsetPanel(
+                   tabPanel("DyGraphs"),
+                   tabPanel("PlotLy"),
+                   tabPanel("highcharter")
+                 )         
         )
       )
     )
