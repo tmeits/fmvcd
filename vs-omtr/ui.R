@@ -5,7 +5,12 @@
 # Find out more about building applications with Shiny here:
 # 
 #    http://shiny.rstudio.com/
-#
+#    http://littleactuary.github.io/blog/Web-application-framework-with-Shiny/
+#    https://www.r-bloggers.com/deploying-desktop-apps-with-r/
+#    http://blog.analytixware.com/2014/03/packaging-your-shiny-app-as-windows.html
+#    https://stackedit.io/editor
+#    https://codeshare.io
+#    https://uasnap.shinyapps.io/akcan_climate/
 
 library(shiny)
 library(shinythemes)
@@ -34,12 +39,20 @@ shinyUI(
                   ".csv", ".cli", ".CLI")
                 ),
       tags$hr(),
+      checkboxInput("viewUploadFormat", "View and select upload format", FALSE),
       # list formats
-      radioButtons("cliFormat", "Format upload .cli files:",
-                   c("VS-Pascal" = "vso",
-                     "VS-Fortran" = "vsf",
-                     "meteo.ru/Aisori" = "aisori")
-                   ),
+      conditionalPanel(
+        condition = "input.viewUploadFormat == true",
+      wellPanel(tags$b(""),
+        radioButtons("cliFormat", "Format upload .cli files:",
+                     c("VS-Pascal" = "vso",
+                       "VS-Fortran" = "vsf",
+                       "meteo.ru/Aisori" = "aisori",
+                       "meteo.ru/Aisori - TAB+Blank" = "aisoriTAB"
+                       )
+                     )
+      )
+      ),
       
       wellPanel(tags$b(""),
       checkboxInput("debug", "View Debug Info", TRUE),
@@ -53,7 +66,11 @@ shinyUI(
         wellPanel(tags$b(""),
                   sliderInput("sigmaPrecGRNN", label = "Changing Sigma - Prec",
                               min = 0.001, 
-                              max = 0.999, value = 0.26))
+                              max = 0.999, value = 0.26),
+                  sliderInput("sigmaTempGRNN", label = "Changing Sigma - Temp",
+                              min = 0.001, 
+                              max = 0.999, value = 0.26)
+                  )
                   ),
       
       selectInput("cliFormatWrite", "Format download .CLI ZIP archive:", 
@@ -85,7 +102,7 @@ shinyUI(
                  )),
         tabPanel("Table",
                  dataTableOutput("contents")),
-        tabPanel("Plot NA's", 
+        tabPanel("Plot NAs", 
                  tabsetPanel(
                    tabPanel("Distribution of NAs",
                             plotOutput("plotNADPrec"),
@@ -110,7 +127,8 @@ shinyUI(
                  tabsetPanel(
                    tabPanel("DyGraphs",
                             dygraphOutput("dygraphTempNAs")
-                            ),
+                            , tags$hr(),
+                            verbatimTextOutput("dygraphTempNAsInfo")),
                    tabPanel("PlotLy",
                             plotlyOutput("plotlyTempNAs")
                    ),
@@ -121,7 +139,11 @@ shinyUI(
         ),
         tabPanel("ImputeNAs Prec", 
                  tabsetPanel(
-                   tabPanel("DyGraphs"),
+                   tabPanel("DyGraphs",
+                            dygraphOutput("dygraphPrecNAs")
+                            , tags$hr(),
+                            verbatimTextOutput("dygraphPrecNAsInfo")
+                            ),
                    tabPanel("PlotLy"),
                    tabPanel("highcharter")
                  )         
