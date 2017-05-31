@@ -26,8 +26,8 @@ library(lubridate)
 library(xts)
 options(shiny.reactlog=TRUE)
 #OS Version definition
-#Sys.setenv(R_ZIPCMD="/usr/bin/zip")
-Sys.setenv(R_ZIPCMD="C:/Users/IVA/Dropbox/Apps/bin/zip.exe")
+#Sys.setenv(R_ZIPCMD="/usr/bin/zip") # Раскоментировать перед публикацией на сервер
+Sys.setenv(R_ZIPCMD="C:/Users/IVA/Dropbox/Apps/bin/zip.exe") # закоментировать перед публикацией на сервер
 #Sys.setenv(R_ZIPCMD="zip.exe")
 #load("impute.rda")
 
@@ -89,8 +89,11 @@ shinyServer(function(input, output, session) {
       cli_merge <- data.frame()
       for (i in 1:nrow(input$file1)) {
         cli <- read.csv(input$file1[[i, 'datapath']],  header=FALSE, sep="")
-        cli[cli$prec == -9999, 4] <- NA 
-        cli[cli$temp == -9999, 5] <- NA 
+        #names(cli) <- c("day", "month", "year", "prec", "temp")
+        #cli[cli$prec == -9999, 4] <- NA 
+        #cli[cli$temp == -9999, 5] <- NA 
+        cli[cli[, 4] == -9999, 4] <- NA 
+        cli[cli[, 5] == -9999, 5] <- NA
         cli_merge <- rbind(cli_merge, cli)
       }
       names(cli_merge) <- c("day", "month", "year", "prec", "temp")
@@ -240,51 +243,31 @@ shinyServer(function(input, output, session) {
       dygraph(main = "Percentage of missing data") %>%
       dyRangeSelector() %>%
       dyOptions(colors = RColorBrewer::brewer.pal(3, "Set2")) %>%
-      dyOptions(connectSeparatedPoints = FALSE, drawPoints = TRUE, pointSize = 2, drawGapEdgePoints = TRUE, strokeWidth = 2) 
+      dyOptions(connectSeparatedPoints = FALSE, drawPoints = TRUE, pointSize = 3, drawGapEdgePoints = TRUE, strokeWidth = 3) 
        
   })
   
-  output$dygraphTempNAs <- renderDygraph({
-    
-    if (input$replaceNAs == "GRNN-ManualSigma") {
-      days <- length(data()$temp)
-      tt <- seq(as.Date(paste0(min(data()$year),'-01-01')), by='day', length=days-1)
-      vals <- data.frame(temp.imp=na.kalman(data()$temp), temp=data()$temp)
-      z <- zoo(vals, tt)
-      z %>%
-        dygraph(main="GRNN-Imputation Temp") %>% # https://www.rdocumentation.org/packages/dygraphs/versions/1.1.1.4/topics/dyOptions
-        #dySeries("temp.imp", drawPoints = FALSE, color = "red") #%>%
-        dyAxis("y", label = "temp") %>%
-        dyOptions(connectSeparatedPoints = FALSE, strokeWidth = 2) %>%
-        dyOptions(colors = RColorBrewer::brewer.pal(3, "Set2")) %>%
-        dyOptions(drawGapEdgePoints = TRUE)  %>%
-        dyRangeSelector()
-    }
-    else {
-      days <- length(data()$temp)
-      tt <- seq(as.Date(paste0(min(data()$year),'-01-01')), by='day', length=days-1)
-      vals <- data.frame(data()$temp)
-      z <- zoo(vals, tt)
-      z %>%
-        dygraph(main=paste(input$replaceNAs, " - Imputation Temp")) %>%
-        dyAxis("y", label = "temp") %>%
-        dyOptions(connectSeparatedPoints = FALSE) %>%
-        dyOptions(colors = RColorBrewer::brewer.pal(3, "Set2")) %>%
-        dyRangeSelector()
-    }
-  })
+  vec.algorithm <- c(
+    "Weighted Moving Average" = "ma",
+    "Kalman Smoothing and State Space Models" = "kalman",
+    "Last Observation Carried Forward" = "locf",
+    "Mean Value" = "mean",
+    "Random Sample" = "random",
+    "Seasonally Decomposed Missing Value Imputation" = "seadec",
+    "Seasonally Splitted Missing Value Imputation " = "seasplit"
+  )
   
-  output$dygraphPrecNAs <- renderDygraph({
-    days <- length(data()$prec)
-    tt <- seq(as.Date(paste0(min(data()$year),'-01-01')), by='day', length=days-1)
-    
-    if (input$replaceNAs == "GRNN-ManualSigma") {
+  imputeVector <- function(x, replaceNAs = "imputeTS", algorithm = "ma") {
+    data <- x
+    if (input$replaceNAs == "imputeTS") {
+      vals <- data.frame(data.imp=na.ma(data), data.na=data)
+    }
+    else if (input$replaceNAs == "GRNN-ManualSigma") {
       withProgress( # http://shiny.rstudio.com/gallery/progress-bar-example.html
         message = 'Calculation in progress',detail = 'This may take a while...', value = 0, {
-          
       s <- input$sigmaPrecGRNN
       ## PRE-PROCESSING DATA
-      vec.na <- data()$prec; vec.na.scale <- grt::scale(vec.na);  
+      vec.na <- data; vec.na.scale <- grt::scale(vec.na);  
       vec.na.scale.min <- min(vec.na.scale, na.rm = TRUE); 
       vec.na.scale.max <- max(vec.na.scale, na.rm = TRUE); 
       vec.na.index <- which(is.na(vec.na)) 
@@ -301,28 +284,58 @@ shinyServer(function(input, output, session) {
           G <- 0
         vec.na.scale[i] <- G
         #cat("Guess num= ", i, "\n")
-        incProgress(0.01, detail = paste("index", i))
+        incProgress(0.005, detail = paste("index", i))
       }
       vec.na.unscale <- grt::unscale(vec.na.scale)
       
-      prec.imp <-as.vector(vec.na.unscale)
-      vals <- data.frame(prec.imp, prec=data()$prec)
-                   })
+      data.imp <-as.vector(vec.na.unscale)
+      vals <- data.frame(data.imp, data.na=data)
+        })
     }
-    else if (input$replaceNAs == "Kalman Smoothing") {
-      vals <- data.frame(prec.imp=as.zero.negative(na.kalman(data()$prec)), prec=data()$prec)
-    } else {
-      vals <- data.frame(data()$prec)
+    else {
+      vals <- data.frame(data.na=data)
     }
-      
-    z <- zoo(vals, tt)
+    vals
+  }
+  
+  output$dygraphTempNAs <- renderDygraph({
+    days <- length(data()$temp)
+    tt <- seq(as.Date(paste0(min(data()$year),'-01-01')), by='day', length=days-1)
+    # 
+    vals.imp <- imputeVector(data()$temp, input$replaceNAs, input$imputeTSalgorithm)
+    if (ncol(vals.imp) == 1)
+      col <- c("red", "blue")
+    else
+      col <- c("blue", "red")
+    z <- zoo(vals.imp, tt)
+    z %>%
+      # https://www.rdocumentation.org/packages/dygraphs/versions/1.1.1.4/topics/dyOptions
+      dygraph(main=paste(input$replaceNAs, " - Imputation Temp")) %>%
+      dyAxis("y", label = "temp") %>%
+      #dyOptions(colors = RColorBrewer::brewer.pal(3, "Set2")) %>%
+      dyOptions(colors = col) %>%
+      dyOptions(connectSeparatedPoints = FALSE, pointSize = 2, drawGapEdgePoints = TRUE, strokeWidth = 2) %>%
+      #dyRangeSelector(height = 30, strokeColor = "teel")
+      dyRangeSelector()
+  })
+  
+  output$dygraphPrecNAs <- renderDygraph({
+    days <- length(data()$prec)
+    tt <- seq(as.Date(paste0(min(data()$year),'-01-01')), by='day', length=days-1)
+    #
+    vals.imp <- imputeVector(data()$prec, input$replaceNAs, input$imputeTSalgorithm)
+    if (ncol(vals.imp) == 2)
+      col <- c("red", "blue")
+    else
+      col <- c("blue", "red")
+    z <- zoo(vals.imp, tt)
     z %>%
     dygraph(main=paste(input$replaceNAs , " - Imputation Prec")) %>% # https://www.rdocumentation.org/packages/dygraphs/versions/1.1.1.4/topics/dyOptions
     #dySeries("temp.imp", drawPoints = FALSE, color = "red") #%>%
     dyAxis("y", label = "prec") %>%
-    dyOptions(connectSeparatedPoints = FALSE, strokeWidth = 2) %>%
-    dyOptions(colors = RColorBrewer::brewer.pal(3, "Set2")) %>%
-    dyOptions(drawGapEdgePoints = TRUE)  %>%
+    #dyOptions(colors = RColorBrewer::brewer.pal(3, "Set2")) %>%
+    dyOptions(colors = col) %>%
+    dyOptions(connectSeparatedPoints = FALSE, pointSize = 2, drawGapEdgePoints = TRUE, strokeWidth = 2)  %>%
     dyRangeSelector()
   })
   
@@ -362,46 +375,39 @@ shinyServer(function(input, output, session) {
           path <- '36307.cli'
         }
         else {
-          path <- input$file1[[1]] #input$file1[[1, 'datapath']]
+          path <- input$file1[[1]] 
         }
         fs <- c(fs, path)
         data.tmp <- data()
+        prec.imp <- imputeVector(data.tmp[, 4])[,1]
+        temp.imp <- imputeVector(data.tmp[, 5])[,1]
         data.write <- data.frame(data.tmp[1:3],
-                                 prec=round(as.zero.negative(na.kalman(data.tmp$prec)), 2),
-                                 temp=round(na.kalman(data.tmp$temp), 2))
+                                 prec=round(as.zero.negative(na.ma(prec.imp)), 2),
+                                 temp=round(na.ma(temp.imp), 2))
         write.table(data.write, path, sep = '\t', dec = '.', row.names = FALSE, col.names = FALSE)
         zip(zipfile=fname, files=fs)
       }
       else if (input$cliFormatWrite == 'VS-Pascal') {
-        if (is.null(input$file1)) {
-          path <- '36307.cli'
+        for (i in min(data()$year) : max(data()$year)) {
+          path <- paste0(i, '.cli')
+          fs <- c(fs, path)
+          data.tmp <- select.year(data(), i)
+          prec.imp <- imputeVector(data.tmp[, 4])[,1]
+          temp.imp <- imputeVector(data.tmp[, 5])[,1]
+          
+          data.write <- data.frame(data.tmp[1:3],
+                                   prec=round(as.integer(as.zero.negative(na.ma(as.vector(prec.imp)))*10), 2),
+                                   temp=round(as.integer(na.ma(as.vector(temp.imp))*10), 2)
+          )
+          #data.write <- data.tmp
+          write.table(data.write, path, sep = '\t', dec = '.', row.names = FALSE, col.names = FALSE)
         }
-        else {
-          for (i in min(data()$year) : max(data()$year)) {
-            path <- paste0(i, '.cli')
-            fs <- c(fs, path)
-            data.tmp <- select.year(data(), i)
-            data.write <- data.frame(data.tmp[1:3],
-                                     prec=round(as.zero.negative(na.kalman(data.tmp$prec)), 2),
-                                     temp=round(na.kalman(data.tmp$temp), 2))
-            #data.write <- data.tmp
-            write.table(data.write, path, sep = '\t', dec = '.', row.names = FALSE, col.names = FALSE)
-          }
-          zip(zipfile=fname, files=fs)
-        }
+        zip(zipfile=fname, files=fs)
       }
       else if (input$cliFormatWrite == 'VS-Fortran') {
         
       }
-      else {
-        for (i in c(1,2,3,4,5)) {
-          path <- paste0("sample_", i, ".csv")
-          fs <- c(fs, path)
-          write(i*2, path)
-        }
-        zip(zipfile=fname, files=fs)
-      }
-    }#,
+    }#, #content
    # contentType = "application/zip"
   )
   

@@ -59,19 +59,44 @@ shinyUI(
       checkboxInput("statsna", "Stats NA Distribution", FALSE)),
       
       selectInput("replaceNAs", "Replace NAs by:", 
-                  choices = c("Select Replacement method", "GRNN-ManualSigma", "GRNN-CrossValidation", "PSO-GRNN","Kalman Smoothing", "mice", "Spline")),
+                  choices = c("Select Replacement method", 
+                              "GRNN-ManualSigma", 
+                              "imputeTS", 
+                              "GRNN-CrossValidation", 
+                              "PSO-GRNN",
+                              "missForest",
+                              "Hmisc", 
+                              "MICE",
+                              "Amelia",
+                              "mi")),
       
       conditionalPanel(
         condition = "input.replaceNAs == 'GRNN-ManualSigma'",
         wellPanel(tags$b(""),
                   sliderInput("sigmaPrecGRNN", label = "Changing Sigma - Prec",
                               min = 0.001, 
-                              max = 0.999, value = 0.26),
+                              max = 0.999, value = 0.01),
                   sliderInput("sigmaTempGRNN", label = "Changing Sigma - Temp",
                               min = 0.001, 
-                              max = 0.999, value = 0.26)
+                              max = 0.999, value = 0.01)
                   )
                   ),
+      conditionalPanel( #http://www.stat.columbia.edu/~gelman/arm/missing.pdf
+        condition = "input.replaceNAs == 'imputeTS'",
+        wellPanel(tags$b(""),
+                  radioButtons("imputeTSalgorithm", "imputeTS algorithm:",
+                               c(
+                                 "Weighted Moving Average" = "ma",
+                                 "Kalman Smoothing and State Space Models" = "kalman",
+                                 "Last Observation Carried Forward" = "locf",
+                                 "Mean Value" = "mean",
+                                 "Random Sample" = "random",
+                                 "Seasonally Decomposed Missing Value Imputation" = "seadec",
+                                 "Seasonally Splitted Missing Value Imputation " = "seasplit"
+                               )
+                  )
+        )
+      ),
       
       selectInput("cliFormatWrite", "Format download .CLI ZIP archive:", 
                   choices = c("VS-Pascal", "VS-Fortran", "VS-Shiny"), 
