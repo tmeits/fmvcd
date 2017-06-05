@@ -28,8 +28,13 @@ options(shiny.reactlog=TRUE)
 #OS Version definition
 #Sys.setenv(R_ZIPCMD="/usr/bin/zip") # Раскоментировать перед публикацией на сервер
 Sys.setenv(R_ZIPCMD="C:/Users/IVA/Dropbox/Apps/bin/zip.exe") # закоментировать перед публикацией на сервер
+Sys.setenv(R_ZIPCMD="C:/Users/lora/Dropbox/Apps/bin/zip.exe")
 #Sys.setenv(R_ZIPCMD="zip.exe")
 #load("impute.rda")
+
+################################
+### GLOBAL DATA for all session's
+################################
 
 station.cli <- read.csv('data/36307.txt', header = FALSE, sep = ";", dec = ".")
 station.cli <- station.cli[-c(5, 6, 7, 9, 10, 11, 13, 14)] 
@@ -45,6 +50,32 @@ shinyServer(function(input, output, session) {
   #  stopApp(NULL)
   #})
   
+  #############################
+  ### GLOBAL DATA
+  #############################
+  
+  temp.vec.imp.global <- NULL
+  prec.vec.imp.global <- NULL
+  
+  temp.vec.imp <- reactive({
+    if (input$replaceNAs == "Select Replacement method")
+      return(NULL)
+    else {
+      return(temp.vec.imp.global)
+    }
+  })
+  prec.vec.imp <- reactive({
+    if (input$replaceNAs == "Select Replacement method")
+      return(NULL)
+    else {
+      return(prec.vec.imp.global)
+    }
+  })
+  
+  
+  ##############################
+  ### UTILS
+  ##############################
   is.leapyear=function(year){
     return(((year %% 4 == 0) & (year %% 100 != 0)) | (year %% 400 == 0))
   }
@@ -79,6 +110,11 @@ shinyServer(function(input, output, session) {
   length_data <-reactive({
     nrow(data())
   })
+  
+  ##############################
+  ### GLOBAL REACTIVE DATA 
+  ##############################
+  values = reactiveValues()
   
   data <- reactive({
     #input$dates_plotNADPrec <-
@@ -117,7 +153,10 @@ shinyServer(function(input, output, session) {
     }
     else vso.cli
   })
-   
+  
+  ##############################
+  ### STATS
+  ##############################
   output$strFileInput <- renderPrint({
     if (is.null(input$file1)) {
       cat("Synop Information for 36307 in Erzin, TY, Russian Federation\n")
@@ -147,10 +186,28 @@ shinyServer(function(input, output, session) {
     }
     
   })
+  
+  output$printStatsGlobalVecImp <- renderPrint({
+    print(summary(temp.vec.imp()))
+    print(summary(prec.vec.imp()))
+  })
+  
+  ##############################
+  ### DATA_TABLE
+  ##############################
   output$contents <- renderDataTable({
     data()
   })
+  #https://editor.datatables.net/examples/inline-editing/simple.html
+  #https://stackoverflow.com/questions/27636931/how-to-implement-inline-editing-on-datatables-in-r-shiny
   
+  #https://groups.google.com/forum/#!msg/shiny-discuss/YH6uz19B1Co/RpeRQIc3mscJ
+  #https://github.com/ThomasSiegmund/D3TableFilter
+  #https://blog.rstudio.org/2015/06/24/dt-an-r-interface-to-the-datatables-library/
+  
+  ##############################
+  ### PLOT_NAs
+  ##############################
   output$plotNADPrec <- renderPlot({
     inMin <- input$num_plotNAD[1]; inMax <- input$num_plotNAD[2]
     plotNA.distribution(data()$prec[inMin:inMax], colPoints = "steelblue", colBackgroundMV = "indianred2", main = "Distribution of NAs", xlab = "Time", ylab = "prec", pch = 20, cexPoints = 0.8, col = "black")
@@ -182,7 +239,7 @@ shinyServer(function(input, output, session) {
   })
   
   ##############################
-  ### PLOT
+  ### PLOT_LY
   ##############################
   
   output$tempNA <-renderPlot({
@@ -227,25 +284,7 @@ shinyServer(function(input, output, session) {
                paste0(" Temp - GRNN-R"), 
                "Temperature in degrees Celsius", "Days")#, 
               # mode_line = input$mode.edom, mode_slider = input$plotlyShowrangesI)
-  }) # 
-  
-  pMiss <- function(x){
-    sum(is.na(x))/length(x)*100
-  }
-  output$dygraphPercentageNAs <- renderDygraph({
-    year<- c(min(data()$year): max(data()$year))
-    perc_temp <- vector(); perc_prec <- vector(); j <- 1
-    for (i in 1:length(year)) {
-      perc_prec[i] <- pMiss(select.year.prec(data(), year[i]))
-      perc_temp[i] <- pMiss(select.year.temp(data(), year[i]))
-    }
-    data.frame(year, perc_temp, perc_prec) %>%
-      dygraph(main = "Percentage of missing data") %>%
-      dyRangeSelector() %>%
-      dyOptions(colors = RColorBrewer::brewer.pal(3, "Set2")) %>%
-      dyOptions(connectSeparatedPoints = FALSE, drawPoints = TRUE, pointSize = 3, drawGapEdgePoints = TRUE, strokeWidth = 3) 
-       
-  })
+  }) 
   
   vec.algorithm <- c(
     "Weighted Moving Average" = "ma",
@@ -257,6 +296,9 @@ shinyServer(function(input, output, session) {
     "Seasonally Splitted Missing Value Imputation " = "seasplit"
   )
   
+  ##############################
+  ### IMPUTATION
+  #############################
   imputeVector <- function(x, replaceNAs = "imputeTS", algorithm = "ma") {
     data <- x
     if (input$replaceNAs == "imputeTS") {
@@ -298,6 +340,26 @@ shinyServer(function(input, output, session) {
     vals
   }
   
+  ##############################
+  ### DYGRAPHS
+  ##############################
+  pMiss <- function(x){
+    sum(is.na(x))/length(x)*100
+  }
+  output$dygraphPercentageNAs <- renderDygraph({
+    year<- c(min(data()$year): max(data()$year))
+    perc_temp <- vector(); perc_prec <- vector(); j <- 1
+    for (i in 1:length(year)) {
+      perc_prec[i] <- pMiss(select.year.prec(data(), year[i]))
+      perc_temp[i] <- pMiss(select.year.temp(data(), year[i]))
+    }
+    data.frame(year, perc_temp, perc_prec) %>%
+      dygraph(main = "Percentage of missing data") %>%
+      dyRangeSelector() %>%
+      dyOptions(colors = RColorBrewer::brewer.pal(3, "Set2")) %>%
+      dyOptions(connectSeparatedPoints = FALSE, drawPoints = TRUE, pointSize = 3, drawGapEdgePoints = TRUE, strokeWidth = 3)
+  })
+  
   output$dygraphTempNAs <- renderDygraph({
     days <- length(data()$temp)
     tt <- seq(as.Date(paste0(min(data()$year),'-01-01')), by='day', length=days-1)
@@ -305,8 +367,10 @@ shinyServer(function(input, output, session) {
     vals.imp <- imputeVector(data()$temp, input$replaceNAs, input$imputeTSalgorithm)
     if (ncol(vals.imp) == 1)
       col <- c("red", "blue")
-    else
+    else {
       col <- c("blue", "red")
+      temp.vec.imp.global <<- vals.imp[, 1]
+    }
     z <- zoo(vals.imp, tt)
     z %>%
       # https://www.rdocumentation.org/packages/dygraphs/versions/1.1.1.4/topics/dyOptions
