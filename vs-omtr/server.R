@@ -28,7 +28,7 @@ options(shiny.reactlog=TRUE)
 #OS Version definition
 #Sys.setenv(R_ZIPCMD="/usr/bin/zip") # Раскоментировать перед публикацией на сервер
 Sys.setenv(R_ZIPCMD="C:/Users/IVA/Dropbox/Apps/bin/zip.exe") # закоментировать перед публикацией на сервер
-Sys.setenv(R_ZIPCMD="C:/Users/lora/Dropbox/Apps/bin/zip.exe")
+#Sys.setenv(R_ZIPCMD="C:/Users/lora/Dropbox/Apps/bin/zip.exe")
 #Sys.setenv(R_ZIPCMD="zip.exe")
 #load("impute.rda")
 
@@ -190,6 +190,9 @@ shinyServer(function(input, output, session) {
   output$printStatsGlobalVecImp <- renderPrint({
     print(summary(temp.vec.imp()))
     print(summary(prec.vec.imp()))
+    print("***")
+    print(temp.vec.imp.global)
+    print(prec.vec.imp.global)
   })
   
   ##############################
@@ -370,6 +373,11 @@ shinyServer(function(input, output, session) {
     else {
       col <- c("blue", "red")
       temp.vec.imp.global <<- vals.imp[, 1]
+      # https://shiny.rstudio.com/articles/scoping.html
+      # http://koaning.io/shiny-and-a-usecase-for-.html
+      # https://stackoverflow.com/questions/42437674/why-does-messes-with-the-scope-of-a-function-in-shiny
+      # https://stackoverflow.com/questions/23409267/environments-in-r-shiny
+      # https://stackoverflow.com/questions/36746582/having-a-global-variable-only-for-session-in-shiny
     }
     z <- zoo(vals.imp, tt)
     z %>%
@@ -388,10 +396,13 @@ shinyServer(function(input, output, session) {
     tt <- seq(as.Date(paste0(min(data()$year),'-01-01')), by='day', length=days-1)
     #
     vals.imp <- imputeVector(data()$prec, input$replaceNAs, input$imputeTSalgorithm)
-    if (ncol(vals.imp) == 2)
+    if (ncol(vals.imp) == 2) {
       col <- c("red", "blue")
-    else
+      prec.vec.imp.global <<- vals.imp[, 1] # <<- 
+    }
+    else {
       col <- c("blue", "red")
+    }
     z <- zoo(vals.imp, tt)
     z %>%
     dygraph(main=paste(input$replaceNAs , " - Imputation Prec")) %>% # https://www.rdocumentation.org/packages/dygraphs/versions/1.1.1.4/topics/dyOptions
@@ -452,10 +463,16 @@ shinyServer(function(input, output, session) {
         zip(zipfile=fname, files=fs)
       }
       else if (input$cliFormatWrite == 'VS-Pascal') {
+        data.tmp <- data()
+        prec.imp <- imputeVector(data.tmp[, 4])[,1]
+        temp.imp <- imputeVector(data.tmp[, 5])[,1]
+        data.imp <- data.frame(data.tmp[1:3],
+                                 prec=round(as.zero.negative(na.ma(prec.imp)), 2),
+                                 temp=round(na.ma(temp.imp), 2))
         for (i in min(data()$year) : max(data()$year)) {
           path <- paste0(i, '.cli')
           fs <- c(fs, path)
-          data.tmp <- select.year(data(), i)
+          data.tmp <- select.year(data.imp, i)
           prec.imp <- imputeVector(data.tmp[, 4])[,1]
           temp.imp <- imputeVector(data.tmp[, 5])[,1]
           
@@ -486,3 +503,5 @@ shinyServer(function(input, output, session) {
   ) # downloadData <- downloadHandler(
   
 })
+
+

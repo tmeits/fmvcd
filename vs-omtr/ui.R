@@ -56,6 +56,7 @@ shinyUI(
       
       wellPanel(tags$b(""),
       checkboxInput("debug", "View Debug Info", TRUE),
+      checkboxInput("globalVec", "View global prec.imp/temp.imp", FALSE),
       checkboxInput("statsna", "Stats NA Distribution", FALSE)),
       
       selectInput("replaceNAs", "Replace NAs by:", 
@@ -124,7 +125,11 @@ shinyUI(
                  conditionalPanel(
                    condition = "input.statsna == true",
                    verbatimTextOutput("printStatsNA")
-                 )),
+                 ),
+                conditionalPanel(
+                  condition = "input.globalVec == true",
+                  verbatimTextOutput("printStatsGlobalVecImp"))
+                ),
         tabPanel("Table",
                  dataTableOutput("contents")),
         tabPanel("Plot NAs", 
