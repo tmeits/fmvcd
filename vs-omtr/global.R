@@ -8,3 +8,11 @@ number.days.year <- function (year){
   else 
     return(rep.int(0, 365)) 
 }
+ymd2date <- function(cDate) {
+  sD <- paste(cDate[1], "-", cDate[2], "-", cDate[3], sep = "") #; print(sD) 
+  return(as.Date(sD)) # The wrong date throws an exception
+}
+dmy2date <- function(cDate) {
+  sD <- paste(cDate[3], "-", cDate[2], "-", cDate[1], sep = "") #; print(sD) 
+  return(as.Date(sD)) # The wrong date throws an exception
+}

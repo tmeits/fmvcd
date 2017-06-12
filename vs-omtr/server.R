@@ -24,6 +24,10 @@ library(dygraphs)
 library(plotly)
 library(lubridate)
 library(xts)
+library(bcv)
+
+source("global.R")
+
 options(shiny.reactlog=TRUE)
 #OS Version definition
 #Sys.setenv(R_ZIPCMD="/usr/bin/zip") # Раскоментировать перед публикацией на сервер
@@ -242,6 +246,50 @@ shinyServer(function(input, output, session) {
   })
   
   ##############################
+  ### IMPUTATION
+  #############################
+  imputeVector <- function(x, replaceNAs = "imputeTS", algorithm = "ma") {
+    data <- x
+    if (input$replaceNAs == "imputeTS") {
+      vals <- data.frame(data.imp=na.ma(data), data.na=data)
+    }
+    else if (input$replaceNAs == "GRNN-ManualSigma") {
+      withProgress( # http://shiny.rstudio.com/gallery/progress-bar-example.html
+        message = 'Calculation in progress',detail = 'This may take a while...', value = 0, {
+          s <- input$sigmaPrecGRNN
+          ## PRE-PROCESSING DATA
+          vec.na <- data; vec.na.scale <- grt::scale(vec.na);  
+          vec.na.scale.min <- min(vec.na.scale, na.rm = TRUE); 
+          vec.na.scale.max <- max(vec.na.scale, na.rm = TRUE); 
+          vec.na.index <- which(is.na(vec.na)) 
+          vec.na.scale.na.omit <- na.omit(vec.na.scale);
+          days <- 1:length(vec.na); days.scale <- grt::scale(days) 
+          days.scale.na.omit <- days.scale[-vec.na.index]; # base::scale(days)
+          XY <- data.frame(days.scale.na.omit, vec.na.scale.na.omit) # vec.scale.na.omit
+          ##
+          L <- grnn::learn(XY, variable.column = ncol(XY))
+          grnn <- grnn::smooth(L, sigma = s)
+          for (i in vec.na.index) {
+            G <- grnn::guess(grnn, days.scale[i, 1])
+            if (is.na(G)) 
+              G <- 0
+            vec.na.scale[i] <- G
+            #cat("Guess num= ", i, "\n")
+            incProgress(0.005, detail = paste("index", i))
+          }
+          vec.na.unscale <- grt::unscale(vec.na.scale)
+          
+          data.imp <-as.vector(vec.na.unscale)
+          vals <- data.frame(data.imp, data.na=data)
+        })
+    }
+    else {
+      vals <- data.frame(data.na=data)
+    }
+    vals
+  }
+  
+  ##############################
   ### PLOT_LY
   ##############################
   
@@ -253,6 +301,7 @@ shinyServer(function(input, output, session) {
     plot(z, col="black", type="l", xlab="years", ylab="temp")
   })
   
+  ###
   plotlyVect <- function(vec.na, vec.impute, vec.title, vec.ysxis, vec.xaxis,
                          mode_line = TRUE, mode_slider = TRUE) {
     days<- 1:length(vec.impute)
@@ -280,13 +329,34 @@ shinyServer(function(input, output, session) {
     p 
   }
   
-  output$plotlyTempNAs <- renderPlotly({
+  output$plotlyTempNAs1 <- renderPlotly({
     #grnn.impute <- na.grnn.vector(data()$temp, 0.1)
     grnn.impute <- na.kalman(data()$temp)
     plotlyVect(data()$temp, grnn.impute,
                paste0(" Temp - GRNN-R"), 
                "Temperature in degrees Celsius", "Days")#, 
               # mode_line = input$mode.edom, mode_slider = input$plotlyShowrangesI)
+  }) 
+  
+  output$plotlyTempNAs <- renderPlotly({
+    # 
+    vals.imp <- imputeVector(data()$temp, input$replaceNAs, input$imputeTSalgorithm)
+    xdays <- dmy2date(data()[1,1:3]) + seq(0, (length(data()$prec) - 1), by = 1)
+    impute.cli <- data.frame(times=xdays, 
+                             temp=data()$temp, 
+                             imp_temp=na.kalman(data()$temp)
+                             )
+    
+    plot_ly(impute.cli, x = ~times, y = ~imp_temp, name = 'imp_temp',
+            type = 'scatter', mode = 'lines',
+            line = list( 
+              color = "#264E86",
+              dash = "dashed")) %>%
+    add_trace(y = ~temp, name = 'temp', type = 'scatter', mode = 'lines', 
+              line = list( 
+                color = "#5E88FC",
+                dash = "dashed")) %>%
+    rangeslider()
   }) 
   
   vec.algorithm <- c(
@@ -299,49 +369,7 @@ shinyServer(function(input, output, session) {
     "Seasonally Splitted Missing Value Imputation " = "seasplit"
   )
   
-  ##############################
-  ### IMPUTATION
-  #############################
-  imputeVector <- function(x, replaceNAs = "imputeTS", algorithm = "ma") {
-    data <- x
-    if (input$replaceNAs == "imputeTS") {
-      vals <- data.frame(data.imp=na.ma(data), data.na=data)
-    }
-    else if (input$replaceNAs == "GRNN-ManualSigma") {
-      withProgress( # http://shiny.rstudio.com/gallery/progress-bar-example.html
-        message = 'Calculation in progress',detail = 'This may take a while...', value = 0, {
-      s <- input$sigmaPrecGRNN
-      ## PRE-PROCESSING DATA
-      vec.na <- data; vec.na.scale <- grt::scale(vec.na);  
-      vec.na.scale.min <- min(vec.na.scale, na.rm = TRUE); 
-      vec.na.scale.max <- max(vec.na.scale, na.rm = TRUE); 
-      vec.na.index <- which(is.na(vec.na)) 
-      vec.na.scale.na.omit <- na.omit(vec.na.scale);
-      days <- 1:length(vec.na); days.scale <- grt::scale(days) 
-      days.scale.na.omit <- days.scale[-vec.na.index]; # base::scale(days)
-      XY <- data.frame(days.scale.na.omit, vec.na.scale.na.omit) # vec.scale.na.omit
-      ##
-      L <- grnn::learn(XY, variable.column = ncol(XY))
-      grnn <- grnn::smooth(L, sigma = s)
-      for (i in vec.na.index) {
-        G <- grnn::guess(grnn, days.scale[i, 1])
-        if (is.na(G)) 
-          G <- 0
-        vec.na.scale[i] <- G
-        #cat("Guess num= ", i, "\n")
-        incProgress(0.005, detail = paste("index", i))
-      }
-      vec.na.unscale <- grt::unscale(vec.na.scale)
-      
-      data.imp <-as.vector(vec.na.unscale)
-      vals <- data.frame(data.imp, data.na=data)
-        })
-    }
-    else {
-      vals <- data.frame(data.na=data)
-    }
-    vals
-  }
+  
   
   ##############################
   ### DYGRAPHS

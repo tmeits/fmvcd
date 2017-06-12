@@ -21,12 +21,12 @@ library(plotly)
 # Define UI for application that draws a histogram
 shinyUI(
   tagList(
-  navbarPage("VS-OMTR",
+  navbarPage("tsGRNNimpute", #"VS-OMTR",
   tabPanel("Imputation",           
   fluidPage(theme = shinytheme("cosmo"), #"flatly" #yeti
   
   # Application title
-  titlePanel("Upload Multiple Files ->  Imputation NA's-> Downloads ZIP archive"),
+  #titlePanel("Upload Multiple Files ->  Imputation NA's-> Downloads ZIP archive"),
   
   # Sidebar with a slider input for number of bins 
   sidebarLayout(
@@ -100,7 +100,7 @@ shinyUI(
       ),
       
       selectInput("cliFormatWrite", "Format download .CLI ZIP archive:", 
-                  choices = c("VS-Pascal", "VS-Fortran", "VS-Shiny"), 
+                  choices = c("VS-Pascal", "VS-Fortran", "VS-Shiny", ".RData"), 
                   selected = "VS-Pascal"),
       
       conditionalPanel(
@@ -182,6 +182,10 @@ shinyUI(
     )
   )
 )),
-tabPanel("About")
+tabPanel("About",
+         tags$hr(),
+         verbatimTextOutput("About"), tags$hr())
 ) # NavBar
 ))
+
+
