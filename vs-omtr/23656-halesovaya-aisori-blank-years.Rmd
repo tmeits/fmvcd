@@ -1,0 +1,417 @@
+---
+title: "23656-halesovaya.txt aisori station: Missing Data"
+author: IVA
+output: html_notebook
+---
+#### 
+```{r require}
+# rm(list=ls())
+require(grnn); require(grt); require(openxlsx); require(imputeTS)
+Sys.setenv(R_ZIPCMD = paste0("C:/Users/IVA/Dropbox/Apps", "/bin/zip.exe")) 
+```
+
+```{r utils}
+is.leapyear=function(year){
+  return(((year %% 4 == 0) & (year %% 100 != 0)) | (year %% 400 == 0))
+}
+number.days.year <- function (year){
+   if (is.leapyear(year)) 
+    return(rep.int(0, 366))
+  else 
+    return(rep.int(0, 365)) 
+}
+setZeroNegativeNumber <- function(n){
+  if(n < 0) return(0)
+  else return(n)
+}
+as.zero.negative <- function(vec){
+  return(sapply(vec, setZeroNegativeNumber))
+}
+select.year <- function(years, num){
+  year <- years[years$Year == num, ]
+  return(year)
+}
+select.year.prec <- function(years, num){
+  year <- select.year(years, num)
+  year.prec <- year$PRECIP
+  return(year.prec)
+}
+select.year.temp <- function(years, num){
+  year <- select.year(years, num)
+  year.temp <- year$TMEAN
+  return(year.temp)
+}
+```
+### na.grnn 
+```{r na_grnn}
+require(grnn); require(grt); require(foreach); require(imputeTS)
+
+na.grnn <- function (x, s) {
+  if(!is.null(dim(x)) && dim(x)[2] != 1) {
+    stop("Input x is not univariate")
+  }
+  if (!is.numeric(x)) {
+    stop("Input x is not numeric") 
+  }
+  if (!is.numeric(s)) {
+    stop("Input s is not numeric") 
+  }
+  if (sum(is.na(x)) == 0) return(x)
+  ## PRE-PROCESSING DATA
+  vec.na <- x; vec.na.scale <- grt::scale(vec.na);  
+  vec.na.scale.min <- min(vec.na.scale, na.rm = TRUE); 
+  vec.na.scale.max <- max(vec.na.scale, na.rm = TRUE); 
+  vec.na.index <- which(is.na(vec.na)) 
+  vec.na.scale.na.omit <- na.omit(vec.na.scale);
+  days <- 1:length(vec.na); days.scale <- grt::scale(days) 
+  days.scale.na.omit <- days.scale[-vec.na.index]; # base::scale(days)
+  XY <- data.frame(days.scale.na.omit, vec.na.scale.na.omit) # vec.scale.na.omit
+  ##
+  L <- grnn::learn(XY, variable.column = ncol(XY))
+  grnn <- grnn::smooth(L, sigma = s)
+  for (i in vec.na.index) {
+    G <- grnn::guess(grnn, days.scale[i, 1])
+    if (is.na(G)) { G <- 0 }
+    vec.na.scale[i] <- G
+    #cat("Guess num= ", i, "\n")
+  }
+  vec.na.unscale <- grt::unscale(vec.na.scale)
+  return(as.vector(vec.na.unscale))
+} #end na.grnn
+
+na.sample <- function(year.vector, size=36){
+  indexs <- sample(length(year.vector), size, replace = FALSE)
+  year.vector[indexs] <- NA
+  return(year.vector)
+}
+
+na.grnn.cv <- function() {}
+```
+####  Reading file with climatic data in the format of the site aisori. Convert and burn in my form of CVS
+
+My file name format-write station code and name, and then write its coordinates
+
++ Original format aisori
++ Convert table by extraneous columns and giving the names of the remaining
++ View downloaded data standard
++ Displaying statistics and rendering passes in the data
+ 
+```{r read_table.aisori}
+#file.cli.path <- "/home/larisa/Dropbox/Apps/na_grnn_year/cli/36442_kara-turek"
+file.cli.path <- "C:/Users/IVA/Dropbox/Apps/missNNet"
+file.name <- "/23656-halesovaya.txt"
+
+nyda.cli <- read.csv(paste0(file.cli.path,file.name), header = FALSE, sep = ";", dec = ".") 
+nyda.cli <- nyda.cli[-c(5, 7, 9, 11, 13, 14)]  # we delete excess columns
+nyda.cli <- setNames(nyda.cli, c("Station", "Year", "Month", "Day", "TMIN", "TMEAN", "TMAX", "PRECIP")) # Assign columns names
+df.cli.site <- nyda.cli
+str(df.cli.site)
+summary(df.cli.site)
+
+plotNA.distribution(df.cli.site[, c(6)]); plotNA.distribution(df.cli.site[, c(8)])
+plotNA.gapsize(df.cli.site[, c(6)]); plotNA.gapsize(df.cli.site[, c(8)]); 
+statsNA(df.cli.site[, c(6)]); cat("\n\n\n"); statsNA(df.cli.site[, c(8)])
+min.temp <- min(df.cli.site$TMEAN, na.rm=T)
+max.temp <- max(df.cli.site$TMEAN, na.rm=T)
+min.prec <- min(df.cli.site$PRECIP, na.rm=T)
+max.prec <- max(df.cli.site$PRECIP, na.rm=T)
+```
+#### Number of gaps in the data by year
+
+In tabicu output only years with nonzero passes. The second column precipitation third temperature
+```{r plot_NA, echo=FALSE}
+vec.years <- unique(df.cli.site$Year)
+site.prec.na <- 1:length(vec.years); site.temp.na <- 1:length(vec.years); k <- 1
+for (i in vec.years){
+  site.prec.na[k] <- sum(is.na(select.year.prec(df.cli.site, i)))
+  site.temp.na[k] <- sum(is.na(select.year.temp(df.cli.site, i)))
+  if(site.prec.na[k] != 0 | site.temp.na[k] != 0){
+    cat(i, site.prec.na[k], site.temp.na[k], "\n")  
+  }
+  k <- k + 1
+}
+require(ggplot2)
+plot.prec.na <- data.frame(years=vec.years, prec=site.prec.na)
+ggplot(plot.prec.na, aes(x=years, y=prec)) + 
+  geom_point(color="steelblue", size=3) + geom_rug() +
+  labs(title="plot.prec.na") +
+  scale_color_brewer(palette="Paired") + theme_minimal()
+
+plot.temp.na <- data.frame(years=vec.years, temp=site.temp.na)
+ggplot(plot.temp.na, aes(x=years, y=temp)) + 
+  geom_point(color="#b47846", size=3) + geom_rug() +
+  labs(title="plot.temp.na") +
+  scale_color_brewer(palette="Paired") + theme_minimal()
+
+```
+#### Fill-in temperature and precipitation. There is no data for the entire year.
+  + Print-filled year that completely lacked
+  + TODO
+    + Use the nearby weather station
+    + Use tree-ring growth indices
+```{r impute_prec, echo=FALSE}
+df.cli.site.period <- df.cli.site[df.cli.site$Year > 1938, ]
+summary(df.cli.site.period[, c(6, 8)])
+
+these.years <- min(df.cli.site.period$Year):max(df.cli.site.period$Year)
+
+number.days.year <- function (year){
+   if (is.leapyear(year)) 
+    return(rep.int(0, 366))
+  else 
+    return(rep.int(0, 365)) 
+}
+#vector values long as filled year
+as.entered <- function (current.year, filled.year, current.year.values){
+  if (!is.leapyear(current.year) & is.leapyear(filled.year)){ 
+       vec <- c(current.year.values, 0.)
+     } else if (is.leapyear(current.year) & !is.leapyear(filled.year)){
+        vec <- current.year.values[1:365]
+     } else vec <- current.year.values
+  return(vec)
+}
+cut.emissions <- function (generated.vector, min.value, max.value){
+  for (k in 1:length(generated.vector)){
+    if (!is.na(generated.vector[k])){
+      if ( generated.vector[k] > max.value)
+        generated.vector[k] <- max.value
+      if (generated.vector[k] < min.value)
+        generated.vector[k] <- min.value
+    } else { stop("*** ERROR cut.emissions - result is.na TRUE") }
+  }
+  return (generated.vector)
+}
+mean0.prec <- function(year.filled, R, K){
+  sum.prec <- number.days.year(year.filled)
+  cat("Length ", year.filled, "year= ", length(sum.prec), "\n")
+  for (i in these.years){
+     prec.now <- as.entered(i, year.filled, select.year.prec(df.cli.site.period, i))     
+     for(k in 1:length(sum.prec)){
+       if (!is.na(prec.now [k])){
+          if (prec.now [k] < 4.) {
+              sum.prec[k] <- (sum.prec[k] +  prec.now[k]) / R
+          } else if (prec.now [k] > 11.){
+             sum.prec[k] <- sum.prec[k] +  prec.now[k] + runif(1, 7, 23)
+          } else {
+            sum.prec[k] <- (sum.prec[k] +  prec.now[k]) / runif(1, 1, K) 
+          }
+       }
+     }
+  }
+  return(cut.emissions(sum.prec, min.prec, max.prec))
+}
+grnn.prec <- function(year, R, K){
+  prec.year <- mean0.prec(year, R, K)
+  plot(prec.year, col="red", main= paste0(year), ylab="Prec(mm)", xlab="Days")
+  prec.year[sample(110:250,4)] <- runif(4, 11,29)
+  points(prec.year, col="green")
+  prec.year <- na.sample(prec.year)
+  points(prec.year, col="yellow")
+  prec.year <- na.grnn(prec.year, 0.01)
+  prec.year[sample(c(110:150),1)] <- runif(1, 29,31)
+  prec.year[which.max(prec.year)] <- runif(1, 19,37)
+  points(prec.year, col="blue")
+  legend("topleft", legend=c("mean0", "sample0", "na", "na.grnn"),  
+         col=c("red", "green", "yellow", "blue"), pch=c(1,1,1,1), cex=0.8)
+  return(prec.year)
+}
+
+grnn.prec.1957 <- grnn.prec(1957, 7, 1.6)
+grnn.prec.1977 <- grnn.prec(1977, 5, 1.6)
+grnn.prec.1993 <- grnn.prec(1993, 9, 2.6)
+grnn.prec.1994 <- grnn.prec(1994, 3, 5.6)
+grnn.prec.1995 <- grnn.prec(1995, 4, 2.6)
+grnn.prec.1996 <- grnn.prec(1996, 3, 4.6)
+
+
+
+```
+#### Fill-in temperature and precipitation. There is no data for the entire year.
+  + Print-filled year that completely lacked
+```{r impute_temp, echo=FALSE}
+summary(df.cli.site.period[, c(6, 8)])
+
+mean0.temp <- function(year.filled, R, K){
+  if (is.leapyear(year.filled)) { 
+    sum.temp <- rep.int(0, 366)
+  } else { 
+    sum.temp <- rep.int(0, 365) }
+  cat("Length ", year.filled, "year= ", length(sum.temp), "\n")
+
+  for (i in these.years){
+     if (!is.leapyear(i) & is.leapyear(year.filled)){ 
+       temp.now <- c(select.year.temp(df.cli.site.period, i), 0.)
+     } else if (is.leapyear(i) & !is.leapyear(year.filled)){
+        temp.now <- select.year.temp(df.cli.site.period, i)[1:365]
+     } else {
+        temp.now <- select.year.temp(df.cli.site.period, i)
+     }
+     
+     for(k in 1:length(sum.temp)){
+       if (!is.na(temp.now [k])){
+         sum.temp[k] <- (sum.temp[k] +  temp.now[k]) / runif(1, R, K) 
+       }
+     }
+  }
+  for(k in 1:length(sum.temp)){
+    if (!is.na(sum.temp [k])){
+      if ( sum.temp[k] > max.temp)
+        sum.temp[k] <- max.temp
+      if (sum.temp[k] < min.temp)
+        sum.temp[k] <- min.temp
+    } else { stop("*** ERROR grnn.temp - result is.na TRUE") }
+  }
+  return(sum.temp)
+}
+
+grnn.temp <- function(year, R, K){
+  temp.year <- mean0.temp(year, R, K)
+  plot(temp.year, col="red", main= paste0(year), ylab="Prec(mm)", xlab="Days")
+  temp.year[sample(160:250,17)] <- runif(17, 9,19)
+  points(temp.year, col="green")
+  temp.year <- na.sample(temp.year)
+  points(temp.year, col="yellow")
+  temp.year <- na.grnn(temp.year, 0.0045)
+  points(temp.year, col="blue")
+  legend("topleft", legend=c("mean0", "sample0", "na", "na.grnn"),  
+         col=c("red", "green", "yellow", "blue"), pch=c(1,1,1,1), cex=0.8)
+  return(temp.year)
+}
+grnn.temp.1957 <- grnn.temp(1957, 1.7 ,2.7)
+grnn.temp.1977 <- grnn.temp(1977, 1.6 ,2.9)
+grnn.temp.1993 <- grnn.temp(1993, 1.8 ,2.5)
+grnn.temp.1994 <- grnn.temp(1994, 1.5 ,2.2)
+grnn.temp.1995 <- grnn.temp(1995, 1.7 ,2.5)
+grnn.temp.1996 <- grnn.temp(1996, 2.0 ,3.0)
+
+
+```
+#### Replacing missing values by year
++  Before and after. Before and after. Well and distributed so missed by year
+```{r insert_new_vectors}
+plot(df.cli.site.period$PRECIP)
+df.cli.site.period[df.cli.site.period$Year==1957, 8] <- grnn.prec.1957
+df.cli.site.period[df.cli.site.period$Year==1977, 8] <- grnn.prec.1977
+df.cli.site.period[df.cli.site.period$Year==1993, 8] <- grnn.prec.1993
+df.cli.site.period[df.cli.site.period$Year==1994, 8] <- grnn.prec.1994
+df.cli.site.period[df.cli.site.period$Year==1995, 8] <- grnn.prec.1995
+df.cli.site.period[df.cli.site.period$Year==1996, 8] <- grnn.prec.1996
+
+df.cli.site.period[df.cli.site.period$Year==1957, 6] <- grnn.temp.1957
+df.cli.site.period[df.cli.site.period$Year==1977, 6] <- grnn.temp.1977
+df.cli.site.period[df.cli.site.period$Year==1993, 6] <- grnn.temp.1993
+df.cli.site.period[df.cli.site.period$Year==1994, 6] <- grnn.temp.1994
+df.cli.site.period[df.cli.site.period$Year==1995, 6] <- grnn.temp.1995
+df.cli.site.period[df.cli.site.period$Year==1996, 6] <- grnn.temp.1996
+
+
+plot(df.cli.site.period$PRECIP)
+plotNA.distribution(df.cli.site.period$PRECIP)
+plotNA.distributionBar(df.cli.site.period$PRECIP)
+plotNA.gapsize(df.cli.site.period$PRECIP)
+print("df.cli.site.period$PRECIP")
+summary(df.cli.site.period$PRECIP)
+plot(df.cli.site.period$TMEAN)
+plotNA.distribution(df.cli.site.period$TMEAN)
+plotNA.distributionBar(df.cli.site.period$TMEAN)
+plotNA.gapsize(df.cli.site.period$TMEAN)
+print("df.cli.site.period$TMEAN")
+summary(df.cli.site.period$TMEAN)
+```
+
+
+#### Application of neural network algorithm for all observations for this station 1
+  + TODO add timeSlider
+
+```{r filled__prec}
+summary(df.cli.site.period[,c(6,8)])
+df.cli.site.prec <- df.cli.site.period$PRECIP
+
+plot(df.cli.site.prec , col="blue")
+cli.site.prec.na <- which(is.na(df.cli.site.prec)) # index in vector
+#cli.site.prec.zoo <- as.zero.negative(na.grnn(df.cli.site.prec, 0.001))
+cli.site.prec.zoo <- as.zero.negative(na.ma(df.cli.site.prec))
+cli.site.prec.kalman <- as.zero.negative(
+  imputeTS::na.kalman(df.cli.site.prec))
+#cli.site.prec.kalman <- as.zero.negative(
+#  imputeTS::na.kalman(df.cli.site.prec, model = "auto.arima", smooth = TRUE))
+
+summary(cli.site.prec.zoo)
+summary(cli.site.prec.kalman)
+
+for(i in 1:length(cli.site.prec.na)){
+  points(cli.site.prec.na[i], cli.site.prec.zoo[cli.site.prec.na[i]], col="red", pch=19)
+}
+for(i in 1:length(cli.site.prec.na)){
+  points(cli.site.prec.na[i], cli.site.prec.kalman[cli.site.prec.na[i]], col="green", pch=19)
+}
+
+plotNA.distribution(df.cli.site.prec)
+```
+#### Application of neural network algorithm for all observations for this station
+
+```{r filled_temp}
+cli.site.temp <- df.cli.site.period$TMEAN
+
+plot(cli.site.temp, col="blue")
+cli.site.temp.na <- which(is.na(cli.site.temp))
+#cli.site.temp.zoo <- na.grnn(cli.site.temp, 0.01) 
+cli.site.temp.zoo <- na.ma(cli.site.temp) 
+cli.site.temp.kalman <- imputeTS::na.kalman(cli.site.temp)
+
+summary(cli.site.temp.zoo)
+summary(cli.site.temp.kalman)
+
+for(i in 1:length(cli.site.temp.na)){
+  points(cli.site.temp.na[i], cli.site.temp.zoo[cli.site.temp.na[i]], col="red", pch=19)
+}
+for(i in 1:length(cli.site.temp.na)){
+  points(cli.site.temp.na[i], cli.site.temp.kalman[cli.site.temp.na[i]], col="green", pch=19)
+}
+
+plotNA.distribution(cli.site.temp)
+```
+#### Write the results in Excel format
+```{r create_new_data_cli}
+require(openxlsx)
+
+df.vso <- data.frame(
+  df.cli.site.period[, c(1,2,3,4), ],
+  Temp = round(cli.site.temp.kalman, 2),
+  Prec = round(cli.site.prec.kalman, 2)
+)
+summary(df.vso)
+openxlsx::write.xlsx(
+  df.vso, 
+  file = paste0(file.cli.path, file.name, ".xlsx"))
+#save(kara_turek, file = paste0(file.cli.path,"/kara_turek.Rdata"))
+
+```
+
+#### Record one year climate data in the format model Vaganova Shashkina
+```{r writeVSO}
+#Reading climatic data in one year. Format VSO
+get_one_year_vso <- function(years, now) {
+  one_year <- years[years$Year == now, ]
+  cli_dataset <- data.frame(
+    one_year[,4], one_year[,3], 
+    one_year[,2], as.integer(one_year$Prec*10), 
+    as.integer(one_year$Temp*10)
+  )
+  names(cli_dataset) <- c("day", "month", "year", "prec", "temp");
+  return(cli_dataset)
+}
+#Record one year climate data in the format model Vaganova Shashkina
+write.table.vso <- function(year.cli, filled_path, file_name){
+  write.table(year.cli, file = paste(filled_path,file_name, sep=""),
+              row.names=FALSE, col.names=FALSE, sep="\t")
+}
+#
+for (i in min(df.cli.site.period$Year):max(df.cli.site.period$Year)){
+  cat("Write .CLI file= ", paste0(i,".CLI"), "\n")
+  df.vso.i <- get_one_year_vso(df.vso, i)
+  summary(df.vso.i)
+  write.table.vso(df.vso.i, file.cli.path, paste0("/23656-halesovaya.cli/", i, ".CLI"))
+}
+# https://www.rdocumentation.org/packages/BBmisc/versions/1.10
+```
